@@ -1,0 +1,5 @@
+build/
+tools/
+docs/*.pdf
+docs/*.txt
+.DS_Store
