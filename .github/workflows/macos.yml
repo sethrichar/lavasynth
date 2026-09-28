@@ -1,0 +1,74 @@
+name: macOS build + validate
+
+# Runs on main and every tag (per CLAUDE.md), plus working branches so a milestone
+# can be proven on macOS before it is merged.
+on:
+  push:
+    branches: [main, "milestone/**", "claude/**"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  AU_TYPE: aumu
+  AU_SUBTYPE: Rtr1
+  AU_MANUFACTURER: Lvsy
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (universal arm64 + x86_64)
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure --no-tests=error
+
+      - name: Check universal binaries
+        run: |
+          lipo -info "build/Rotor_artefacts/Release/VST3/Rotor.vst3/Contents/MacOS/Rotor"
+          lipo -info "build/Rotor_artefacts/Release/AU/Rotor.component/Contents/MacOS/Rotor"
+
+      - name: Ad-hoc sign
+        run: |
+          codesign --force --deep --sign - "build/Rotor_artefacts/Release/VST3/Rotor.vst3"
+          codesign --force --deep --sign - "build/Rotor_artefacts/Release/AU/Rotor.component"
+          codesign --force --deep --sign - "build/Rotor_artefacts/Release/Standalone/Rotor.app"
+
+      - name: pluginval (strictness 5)
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --validate-in-process \
+            --validate "build/Rotor_artefacts/Release/VST3/Rotor.vst3"
+
+      - name: auval
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "build/Rotor_artefacts/Release/AU/Rotor.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -a | grep -i "$AU_SUBTYPE" || true
+          auval -v "$AU_TYPE" "$AU_SUBTYPE" "$AU_MANUFACTURER" | tee auval.log
+          grep -q "AU VALIDATION SUCCEEDED" auval.log
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp -R build/Rotor_artefacts/Release/VST3/Rotor.vst3 dist/
+          cp -R build/Rotor_artefacts/Release/AU/Rotor.component dist/
+          cp -R build/Rotor_artefacts/Release/Standalone/Rotor.app dist/
+          cd dist && zip -qry "../Rotor-macOS-${GITHUB_REF_NAME//\//-}.zip" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rotor-macOS-${{ github.sha }}
+          path: Rotor-macOS-*.zip

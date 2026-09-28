@@ -10,12 +10,13 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 - [ ] Does unison add any detune/spread by itself, or only via the wildcard params?
 
 ## Voices / global
-- [ ] Exact shark-tooth waveform shape.
+- [ ] Exact shark-tooth waveform shape. (v1.1 assumes a skewed triangle: 85% rise, 15% fall — `Oscillator::sharkToothRise`.)
+- [ ] Does the hardware respond to note velocity (amp level, filter)? (v1.1 assumes velocity scales amp level.)
 - [ ] How voice level/octave "influence the sub-oscillators, filters, LFO, all key-tracking behaviors" beyond the obvious.
 - [ ] Confirm the four distortion stages (assumed: OSC-level overdrive, filter resonance, wavefolder, CMOS drive).
 
 ## Modulation (priority 2)
-- [ ] Envelope minimum times and slider curves.
+- [ ] Envelope minimum times and slider curves. (v1.1 assumes 1 ms minimum, exponential sliders; attack max 20 s, decay max 60 s, release max 1 h.)
 - [ ] How much sustain shortens A/D in loop mode.
 - [ ] Phase distortion algorithm (CZ-style assumed).
 - [ ] Key-tracking knob ranges (amp env, mod env, filter, LFO).
