@@ -45,6 +45,24 @@ inline constexpr const char* attack = "attack";
 inline constexpr const char* decay = "decay";
 inline constexpr const char* sustain = "sustain";
 inline constexpr const char* release = "release";
+inline constexpr const char* ampLoop = "ampLoop";
+inline constexpr const char* ampKeyTrack = "ampKeyTrack";
+
+// Mod envelope
+inline constexpr const char* modAttack = "modAttack";
+inline constexpr const char* modDecay = "modDecay";
+inline constexpr const char* modSustain = "modSustain";
+inline constexpr const char* modRelease = "modRelease";
+inline constexpr const char* modLoop = "modLoop";
+inline constexpr const char* modKeyTrack = "modKeyTrack";
+inline constexpr const char* modEnvToPd = "modEnvToPd";
+inline constexpr const char* modEnvToCutoff = "modEnvToCutoff";
+inline constexpr const char* modEnvToLfoRate = "modEnvToLfoRate";
+inline constexpr const char* modEnvToSpread = "modEnvToSpread";
+inline constexpr const char* modEnvToFold = "modEnvToFold";
+
+// Host sync (ENV CLK)
+inline constexpr const char* envSync = "envSync";
 
 // Master
 inline constexpr const char* level = "level";

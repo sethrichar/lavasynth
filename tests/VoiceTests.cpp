@@ -178,3 +178,53 @@ TEST_CASE ("Filter key tracking follows the played pitch", "[voice]")
     v.moveTo (48);
     CHECK (v.getFilterCutoff() == Catch::Approx (500.0));
 }
+
+TEST_CASE ("Mod envelope moves the filter cutoff (bipolar)", "[voice][modulation]")
+{
+    auto cutoffAtPeak = [] (double depth)
+    {
+        Voice v;
+        v.prepare (192000.0);
+        Voice::Parameters p;
+        p.cutoffHz = 1000.0;
+        p.mod = { 0.02, 1.0, 0.0, 0.1, false };
+        p.modEnvDepth.cutoff = depth;
+        v.setParameters (p);
+        v.noteOn (60, 1.0f);
+        double peakLevel = 0.0, cutoff = 0.0;
+        for (int i = 0; i < 192000 / 20; ++i) // through the attack
+        {
+            v.process();
+            if (v.getModEnvLevel() > peakLevel)
+            {
+                peakLevel = v.getModEnvLevel();
+                cutoff = v.getFilterCutoff();
+            }
+        }
+        return cutoff;
+    };
+    CHECK (cutoffAtPeak (0.0) == Catch::Approx (1000.0));
+    // Full positive depth at the envelope's peak: +5 octaves (within an update interval of the peak).
+    CHECK (cutoffAtPeak (1.0) == Catch::Approx (32000.0).epsilon (0.05));
+    CHECK (cutoffAtPeak (-0.2) == Catch::Approx (500.0).epsilon (0.05));
+}
+
+TEST_CASE ("Mod envelope on the wavefolder folds back at the top of the range", "[voice][modulation]")
+{
+    Voice v;
+    v.prepare (192000.0);
+    Voice::Parameters p;
+    p.fold = 0.6;
+    p.mod = { 0.02, 5.0, 1.0, 0.1, false }; // rises to 1 and holds
+    p.modEnvDepth.fold = 0.8;               // 0.6 + 0.8 = 1.4 → folds to 0.6
+    v.setParameters (p);
+    v.noteOn (60, 1.0f);
+    double highest = 0.0;
+    for (int i = 0; i < 192000 / 10; ++i)
+    {
+        v.process();
+        highest = std::max (highest, v.getFoldAmount());
+    }
+    CHECK (highest == Catch::Approx (1.0).margin (0.01)); // passed through the top…
+    CHECK (v.getFoldAmount() == Catch::Approx (0.6).margin (0.01)); // …and reflected back down
+}

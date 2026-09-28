@@ -35,7 +35,12 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 - [ ] Wavefolder depth and curve. (Assumed: sine folder, up to ~3.5 folds on a full-scale input.)
 
 ## Modulation (priority 2)
-- [ ] Envelope minimum times and slider curves. (v1.1 assumes 1 ms minimum, exponential sliders; attack max 20 s, decay max 60 s, release max 1 h.)
+- [ ] Envelope minimum times and slider curves. (v1.5 assumes min attack = min decay = 15.3 ms so the fastest loop is exactly C1 = 32.7 Hz,
+  as the manual states; exponential sliders; attack max 20 s, decay max 60 s, release max 1 h. This makes the shortest attack 15 ms.)
+- [ ] Envelope curve shape. (Assumed: analog RC curves; stage times are full-swing times, so higher sustain shortens decay and loops.)
+- [ ] Envelope/LFO key-tracking reference note. (Assumed: middle C = the panel times; ±1 = double/halve per octave.)
+- [ ] Mod envelope depth ranges. (Assumed: cutoff ±5 octaves at full depth; wavefolder ±1 of its range, folding at the ends.)
+- [ ] ENV CLK note grid. (Assumed: 1/64 note to 16 bars, straight/triplet/dotted; a 1-hour release snaps to the longest value.)
 - [ ] How much sustain shortens A/D in loop mode.
 - [ ] Phase distortion algorithm (CZ-style assumed).
 - [ ] Key-tracking knob ranges (amp env, mod env, filter, LFO).

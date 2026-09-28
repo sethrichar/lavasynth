@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Parameters.h"
+#include "dsp/HostSync.h"
 #include "dsp/Noise.h"
 #include "dsp/Oversampling.h"
 #include "dsp/Voice.h"
@@ -74,10 +75,25 @@ private:
     std::atomic<float>* resonanceParam = nullptr;
     std::atomic<float>* keyTrackParam = nullptr;
     std::atomic<float>* foldParam = nullptr;
-    std::atomic<float>* attackParam = nullptr;
-    std::atomic<float>* decayParam = nullptr;
-    std::atomic<float>* sustainParam = nullptr;
-    std::atomic<float>* releaseParam = nullptr;
+    struct EnvelopeParams
+    {
+        std::atomic<float>* attack = nullptr;
+        std::atomic<float>* decay = nullptr;
+        std::atomic<float>* sustain = nullptr;
+        std::atomic<float>* release = nullptr;
+        std::atomic<float>* loop = nullptr;
+        std::atomic<float>* keyTrack = nullptr;
+    };
+    EnvelopeParams ampEnvParams, modEnvParams;
+    rotor::Envelope::Parameters readEnvelope (const EnvelopeParams& e) const;
+
+    std::atomic<float>* modEnvToPdParam = nullptr;
+    std::atomic<float>* modEnvToCutoffParam = nullptr;
+    std::atomic<float>* modEnvToLfoRateParam = nullptr;
+    std::atomic<float>* modEnvToSpreadParam = nullptr;
+    std::atomic<float>* modEnvToFoldParam = nullptr;
+    std::atomic<float>* envSyncParam = nullptr;
+    double hostBpm = 120.0;
     std::atomic<float>* levelParam = nullptr;
 
     rotor::VoiceAllocator allocator;
@@ -99,6 +115,8 @@ private:
     juce::SmoothedValue<float> smoothedNoiseLevel;
     juce::SmoothedValue<float> smoothedNoiseColor;
     juce::SmoothedValue<float> smoothedFold;
+    juce::SmoothedValue<float> smoothedModEnvToCutoff;
+    juce::SmoothedValue<float> smoothedModEnvToFold;
     juce::SmoothedValue<float> smoothedLevel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RotorAudioProcessor)

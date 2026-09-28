@@ -39,10 +39,18 @@ RotorAudioProcessor::RotorAudioProcessor()
     resonanceParam = state.getRawParameterValue (resonance);
     keyTrackParam = state.getRawParameterValue (keyTrack);
     foldParam = state.getRawParameterValue (fold);
-    attackParam = state.getRawParameterValue (attack);
-    decayParam = state.getRawParameterValue (decay);
-    sustainParam = state.getRawParameterValue (sustain);
-    releaseParam = state.getRawParameterValue (release);
+    ampEnvParams = { state.getRawParameterValue (attack), state.getRawParameterValue (decay),
+                     state.getRawParameterValue (sustain), state.getRawParameterValue (release),
+                     state.getRawParameterValue (ampLoop), state.getRawParameterValue (ampKeyTrack) };
+    modEnvParams = { state.getRawParameterValue (modAttack), state.getRawParameterValue (modDecay),
+                     state.getRawParameterValue (modSustain), state.getRawParameterValue (modRelease),
+                     state.getRawParameterValue (modLoop), state.getRawParameterValue (modKeyTrack) };
+    modEnvToPdParam = state.getRawParameterValue (modEnvToPd);
+    modEnvToCutoffParam = state.getRawParameterValue (modEnvToCutoff);
+    modEnvToLfoRateParam = state.getRawParameterValue (modEnvToLfoRate);
+    modEnvToSpreadParam = state.getRawParameterValue (modEnvToSpread);
+    modEnvToFoldParam = state.getRawParameterValue (modEnvToFold);
+    envSyncParam = state.getRawParameterValue (envSync);
     levelParam = state.getRawParameterValue (level);
 }
 
@@ -78,6 +86,8 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
     initControl (smoothedNoiseLevel, noiseLevelParam);
     initControl (smoothedNoiseColor, noiseColorParam);
     initControl (smoothedFold, foldParam);
+    initControl (smoothedModEnvToCutoff, modEnvToCutoffParam);
+    initControl (smoothedModEnvToFold, modEnvToFoldParam);
     smoothedLevel.reset (sampleRate, smoothingSeconds);
     smoothedLevel.setCurrentAndTargetValue (levelParam->load());
 
@@ -106,10 +116,15 @@ void RotorAudioProcessor::updateVoiceParameters()
     p.resonance = smoothedResonance.getNextValue();
     p.keyTrack = keyTrackParam->load();
     p.fold = smoothedFold.getNextValue();
-    p.amp.attackSeconds = attackParam->load();
-    p.amp.decaySeconds = decayParam->load();
-    p.amp.sustainLevel = sustainParam->load();
-    p.amp.releaseSeconds = releaseParam->load();
+    p.amp = readEnvelope (ampEnvParams);
+    p.mod = readEnvelope (modEnvParams);
+    p.ampKeyTrack = ampEnvParams.keyTrack->load();
+    p.modKeyTrack = modEnvParams.keyTrack->load();
+    p.modEnvDepth.phaseDistortion = modEnvToPdParam->load();
+    p.modEnvDepth.cutoff = smoothedModEnvToCutoff.getNextValue();
+    p.modEnvDepth.lfoRate = modEnvToLfoRateParam->load();
+    p.modEnvDepth.spread = modEnvToSpreadParam->load();
+    p.modEnvDepth.fold = smoothedModEnvToFold.getNextValue();
 
     for (int i = 0; i < rotor::numVoices; ++i)
     {
@@ -125,10 +140,34 @@ void RotorAudioProcessor::updateVoiceParameters()
         apply (allocator.setVoiceEnabled (i, voiceParams[(size_t) i].on->load() >= 0.5f));
 }
 
+rotor::Envelope::Parameters RotorAudioProcessor::readEnvelope (const EnvelopeParams& e) const
+{
+    rotor::Envelope::Parameters p;
+    p.attackSeconds = e.attack->load();
+    p.decaySeconds = e.decay->load();
+    p.sustainLevel = e.sustain->load();
+    p.releaseSeconds = e.release->load();
+    p.loop = e.loop->load() >= 0.5f;
+
+    // ENV CLK: snap the stage times to note values at the host tempo.
+    if (envSyncParam->load() >= 0.5f)
+    {
+        p.attackSeconds = rotor::NoteValues::snapSeconds (p.attackSeconds, hostBpm);
+        p.decaySeconds = rotor::NoteValues::snapSeconds (p.decaySeconds, hostBpm);
+        p.releaseSeconds = rotor::NoteValues::snapSeconds (p.releaseSeconds, hostBpm);
+    }
+    return p;
+}
+
 void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
+
+    if (auto* host = getPlayHead())
+        if (auto position = host->getPosition())
+            if (auto bpm = position->getBpm(); bpm.hasValue() && *bpm > 0.0)
+                hostBpm = *bpm;
 
     smoothedCutoff.setTargetValue (cutoffParam->load());
     smoothedResonance.setTargetValue (resonanceParam->load());
@@ -137,6 +176,8 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     smoothedNoiseLevel.setTargetValue (noiseLevelParam->load());
     smoothedNoiseColor.setTargetValue (noiseColorParam->load());
     smoothedFold.setTargetValue (foldParam->load());
+    smoothedModEnvToCutoff.setTargetValue (modEnvToCutoffParam->load());
+    smoothedModEnvToFold.setTargetValue (modEnvToFoldParam->load());
     smoothedLevel.setTargetValue (levelParam->load());
 
     const int numSamples = buffer.getNumSamples();
