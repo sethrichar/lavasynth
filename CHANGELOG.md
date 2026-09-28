@@ -12,6 +12,24 @@ Each entry: what changed, what's broken, how to roll back.
 
 ## Code
 
+### v1.2 — 2026-09-28 — 5 voices, Round-Robin allocation, glide
+**Changed**
+- Five fixed voices, each with On/Off, Level, Octave (−2..+2) and Waveform. Filter, amp envelope and glide are shared controls.
+- Voice allocator (`src/dsp/VoiceAllocator.h`, pure logic): Round-Robin **Forward**, **Backward**, **Random**; disabled voices skipped;
+  rotation steals the next voice even while it sounds; **Round-Robin Reset** option (back to voice 1 when all keys are up).
+  Random is seeded (reproducible) and never repeats the same voice twice in a row.
+- Glide: constant rate in semitones, so time scales with the interval; descending takes 10% longer. Knob = seconds per octave (0 = off).
+- Parameters: new `voiceMode`, `roundRobinReset`, `glide`, `voice1On`…`voice5Waveform`. Retired v1.1's single-voice `waveform` and `octave`.
+  `level` is now labelled Master Level (same ID).
+- 37 unit tests (22 new: every allocator mode/option, enabling/disabling voices mid-note, glide timing).
+
+**Validated**: unit tests pass, Linux pluginval passes at strictness 5 and 10, macOS workflow green (pluginval + auval).
+
+**Broken / not yet done**: unison modes (Staccato/Legato/Mono) come in v1.3. Voices are summed to mono-centre (spreader is v1.6).
+New guesses logged in `OPEN_QUESTIONS.md`: Backward + Reset start voice, glide source note and curve, disabling a sounding voice.
+
+**Roll back**: `git checkout v1.1`.
+
 ### v1.1 — 2026-09-28 — JUCE skeleton, one voice
 **Changed**
 - CMake project; JUCE pulled with FetchContent, pinned to **JUCE 8.0.15**. Catch2 **v3.7.1** for unit tests.

@@ -5,6 +5,9 @@ namespace
     // Parameters that are expensive to apply (filter coefficients) are updated every this many samples.
     constexpr int controlBlockSize = 32;
     constexpr double smoothingSeconds = 0.02;
+
+    // Headroom for five summed voices.
+    constexpr float voiceSumGain = 0.4f;
 } // namespace
 
 RotorAudioProcessor::RotorAudioProcessor()
@@ -12,8 +15,17 @@ RotorAudioProcessor::RotorAudioProcessor()
       state (*this, nullptr, "RotorState", rotor::params::createLayout())
 {
     using namespace rotor::params;
-    waveformParam = state.getRawParameterValue (waveform);
-    octaveParam = state.getRawParameterValue (octave);
+    for (int i = 0; i < rotor::numVoices; ++i)
+    {
+        auto& vp = voiceParams[(size_t) i];
+        vp.on = state.getRawParameterValue (voiceOn (i));
+        vp.level = state.getRawParameterValue (voiceLevel (i));
+        vp.octave = state.getRawParameterValue (voiceOctave (i));
+        vp.waveform = state.getRawParameterValue (voiceWaveform (i));
+    }
+    voiceModeParam = state.getRawParameterValue (voiceMode);
+    roundRobinResetParam = state.getRawParameterValue (roundRobinReset);
+    glideParam = state.getRawParameterValue (glide);
     cutoffParam = state.getRawParameterValue (cutoff);
     resonanceParam = state.getRawParameterValue (resonance);
     attackParam = state.getRawParameterValue (attack);
@@ -31,8 +43,9 @@ bool RotorAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) co
 
 void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
 {
-    voice.prepare (sampleRate);
-    numHeld = 0;
+    for (auto& v : voices)
+        v.prepare (sampleRate);
+    allocator.reset();
 
     // Control-rate smoothers tick once per control block, the level smoother once per sample.
     const double controlRate = sampleRate / controlBlockSize;
@@ -48,16 +61,28 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
 
 void RotorAudioProcessor::updateVoiceParameters()
 {
+    allocator.setMode (static_cast<rotor::VoiceAllocator::Mode> (juce::jlimit (0, 2, (int) voiceModeParam->load())));
+    allocator.setRoundRobinReset (roundRobinResetParam->load() >= 0.5f);
+
     rotor::Voice::Parameters p;
-    p.waveform = static_cast<rotor::Waveform> (juce::jlimit (0, rotor::numWaveforms - 1, (int) waveformParam->load()));
-    p.octave = juce::jlimit (-2, 2, juce::roundToInt (octaveParam->load()));
     p.cutoffHz = smoothedCutoff.getNextValue();
     p.resonance = smoothedResonance.getNextValue();
+    p.glideSecondsPerOctave = glideParam->load();
     p.amp.attackSeconds = attackParam->load();
     p.amp.decaySeconds = decayParam->load();
     p.amp.sustainLevel = sustainParam->load();
     p.amp.releaseSeconds = releaseParam->load();
-    voice.setParameters (p);
+
+    for (int i = 0; i < rotor::numVoices; ++i)
+    {
+        const auto& vp = voiceParams[(size_t) i];
+        releaseVoices (allocator.setVoiceEnabled (i, vp.on->load() >= 0.5f));
+
+        p.waveform = static_cast<rotor::Waveform> (juce::jlimit (0, rotor::numWaveforms - 1, (int) vp.waveform->load()));
+        p.octave = juce::jlimit (-2, 2, juce::roundToInt (vp.octave->load()));
+        p.level = vp.level->load();
+        voices[(size_t) i].setParameters (p);
+    }
 }
 
 void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -88,18 +113,23 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             end = std::min (end, (*midiIt).samplePosition);
 
         updateVoiceParameters();
-        renderVoice (left + pos, right != nullptr ? right + pos : nullptr, end - pos);
+        render (left + pos, right != nullptr ? right + pos : nullptr, end - pos);
         pos = end;
     }
     for (; midiIt != midi.cend(); ++midiIt)
         handleMidi ((*midiIt).getMessage());
 }
 
-void RotorAudioProcessor::renderVoice (float* left, float* right, int numSamples)
+void RotorAudioProcessor::render (float* left, float* right, int numSamples)
 {
     for (int i = 0; i < numSamples; ++i)
     {
-        const float s = voice.process() * smoothedLevel.getNextValue();
+        float sum = 0.0f;
+        for (auto& v : voices)
+            sum += v.process();
+
+        // v1.6 adds the stereo spreader; until then voices are summed to the centre.
+        const float s = sum * voiceSumGain * smoothedLevel.getNextValue();
         left[i] = s;
         if (right != nullptr)
             right[i] = s;
@@ -109,58 +139,32 @@ void RotorAudioProcessor::renderVoice (float* left, float* right, int numSamples
 void RotorAudioProcessor::handleMidi (const juce::MidiMessage& m)
 {
     if (m.isNoteOn())
-        noteOn (m.getNoteNumber(), m.getFloatVelocity());
-    else if (m.isNoteOff())
-        noteOff (m.getNoteNumber());
-    else if (m.isAllNotesOff() || m.isAllSoundOff())
-        allNotesOff();
-}
-
-void RotorAudioProcessor::noteOn (int note, float velocity)
-{
-    removeHeld (note); // drop a duplicate of this key from the stack
-    if (numHeld < (int) heldNotes.size())
-        heldNotes[(size_t) numHeld++] = note;
-
-    // OPEN: velocity response (does the hardware respond to velocity at all?).
-    lastVelocity = velocity;
-    voice.noteOn (note, velocity);
-}
-
-bool RotorAudioProcessor::removeHeld (int note)
-{
-    for (int i = 0; i < numHeld; ++i)
     {
-        if (heldNotes[(size_t) i] != note)
-            continue;
-        for (int j = i; j < numHeld - 1; ++j)
-            heldNotes[(size_t) j] = heldNotes[(size_t) j + 1];
-        --numHeld;
-        return true;
+        const int v = allocator.noteOn (m.getNoteNumber());
+        // OPEN: velocity response (does the hardware respond to velocity at all?).
+        if (v >= 0)
+            voices[(size_t) v].noteOn (m.getNoteNumber(), m.getFloatVelocity());
     }
-    return false;
+    else if (m.isNoteOff())
+    {
+        releaseVoices (allocator.noteOff (m.getNoteNumber()));
+    }
+    else if (m.isAllNotesOff() || m.isAllSoundOff())
+    {
+        releaseVoices (allocator.allNotesOff());
+    }
 }
 
-void RotorAudioProcessor::noteOff (int note)
+void RotorAudioProcessor::releaseVoices (rotor::VoiceAllocator::VoiceMask mask)
 {
-    if (! removeHeld (note) || voice.getCurrentNote() != note)
-        return;
-
-    if (numHeld > 0)
-        voice.noteOn (heldNotes[(size_t) numHeld - 1], lastVelocity);
-    else
-        voice.noteOff();
-}
-
-void RotorAudioProcessor::allNotesOff()
-{
-    numHeld = 0;
-    voice.noteOff();
+    for (int i = 0; i < rotor::numVoices; ++i)
+        if ((mask & rotor::VoiceAllocator::maskOf (i)) != 0)
+            voices[(size_t) i].noteOff();
 }
 
 juce::AudioProcessorEditor* RotorAudioProcessor::createEditor()
 {
-    // v1.1: generic editor. The real UI comes in v1.9.
+    // Generic editor until the UI pass in v1.9.
     return new juce::GenericAudioProcessorEditor (*this);
 }
 

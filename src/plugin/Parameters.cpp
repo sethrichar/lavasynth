@@ -26,16 +26,41 @@ namespace
     }
 } // namespace
 
+juce::String voiceOn (int i) { return "voice" + juce::String (i + 1) + "On"; }
+juce::String voiceLevel (int i) { return "voice" + juce::String (i + 1) + "Level"; }
+juce::String voiceOctave (int i) { return "voice" + juce::String (i + 1) + "Octave"; }
+juce::String voiceWaveform (int i) { return "voice" + juce::String (i + 1) + "Waveform"; }
+
 juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
 {
     using namespace juce;
     AudioProcessorValueTreeState::ParameterLayout layout;
 
     layout.add (std::make_unique<AudioParameterChoice> (
-        ParameterID { waveform, version }, "Waveform",
-        StringArray { "Square", "Saw", "Shark-tooth", "Triangle", "Sine" }, 2));
+        ParameterID { voiceMode, version }, "Voice Mode",
+        StringArray { "Forward", "Backward", "Random" }, 0));
+    layout.add (std::make_unique<AudioParameterBool> (
+        ParameterID { roundRobinReset, version }, "Round-Robin Reset", false));
 
-    layout.add (std::make_unique<AudioParameterInt> (ParameterID { octave, version }, "Octave", -2, 2, 0));
+    for (int i = 0; i < rotor::numVoices; ++i)
+    {
+        const String name = "Voice " + String (i + 1) + " ";
+        layout.add (std::make_unique<AudioParameterBool> (ParameterID { voiceOn (i), version }, name + "On", true));
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { voiceLevel (i), version }, name + "Level", NormalisableRange<float> (0.0f, 1.0f), 0.8f));
+        layout.add (std::make_unique<AudioParameterInt> (ParameterID { voiceOctave (i), version }, name + "Octave", -2, 2, 0));
+        layout.add (std::make_unique<AudioParameterChoice> (
+            ParameterID { voiceWaveform (i), version }, name + "Waveform",
+            StringArray { "Square", "Saw", "Shark-tooth", "Triangle", "Sine" }, 2));
+    }
+
+    // Glide: seconds per octave; 0 = off.
+    NormalisableRange<float> glideRange (0.0f, 5.0f);
+    glideRange.setSkewForCentre (0.3f);
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { glide, version }, "Glide", glideRange, 0.0f,
+        AudioParameterFloatAttributes().withStringFromValueFunction (
+            [] (float v, int) { return v <= 0.0f ? String ("Off") : secondsToText (v, 0) + "/oct"; })));
 
     NormalisableRange<float> cutoffRange (20.0f, 20000.0f);
     cutoffRange.setSkewForCentre (1000.0f);
@@ -57,7 +82,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
         ParameterID { release, version }, "Release", timeRange (0.001f, 3600.0f), 0.3f, timeAttributes()));
 
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { level, version }, "Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f));
+        ParameterID { level, version }, "Master Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f));
 
     return layout;
 }
