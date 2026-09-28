@@ -1,0 +1,112 @@
+// Offline render of the full plugin: CPU cost, peak/RMS, NaN check, optional WAV.
+// Build: cmake -DROTOR_BUILD_DEVTOOLS=ON …; run: ./RotorRender [out.wav]
+#include "plugin/PluginProcessor.h"
+
+#include <juce_audio_formats/juce_audio_formats.h>
+
+#include <chrono>
+#include <cstdio>
+
+namespace
+{
+    void set (RotorAudioProcessor& p, const juce::String& id, float value)
+    {
+        auto* param = p.getState().getParameter (id);
+        param->setValueNotifyingHost (param->convertTo0to1 (value));
+    }
+} // namespace
+
+int main (int argc, char** argv)
+{
+    juce::ScopedJuceInitialiser_GUI init;
+    constexpr double sr = 48000.0;
+    constexpr int block = 256;
+    constexpr double seconds = 12.0;
+
+    RotorAudioProcessor p;
+    p.setPlayConfigDetails (0, 2, sr, block);
+    p.prepareToPlay (sr, block);
+
+    // A busy patch: everything on.
+    set (p, "voiceMode", 0);
+    set (p, "oscLevel", 0.8f);
+    set (p, "subLevel", 0.6f);
+    set (p, "noiseLevel", 0.3f);
+    set (p, "noiseColor", 0.5f);
+    set (p, "cutoff", 1200.0f);
+    set (p, "resonance", 0.7f);
+    set (p, "keyTrack", 0.5f);
+    set (p, "fold", 0.4f);
+    set (p, "release", 1.5f);
+
+    const int totalBlocks = (int) (seconds * sr / block);
+    juce::AudioBuffer<float> buffer (2, block);
+    juce::AudioBuffer<float> recording (2, totalBlocks * block);
+
+    const int chords[4][5] = { { 48, 55, 60, 64, 67 }, { 45, 52, 57, 60, 64 }, { 41, 48, 53, 57, 60 }, { 43, 50, 55, 59, 62 } };
+    double peak = 0.0, sumSq = 0.0;
+    bool finite = true;
+    auto start = std::chrono::steady_clock::now();
+
+    for (int b = 0; b < totalBlocks; ++b)
+    {
+        juce::MidiBuffer midi;
+        const int blocksPerChord = totalBlocks / 8;
+        if (b % blocksPerChord == 0)
+        {
+            const int c = (b / blocksPerChord) % 4;
+            for (int n : chords[c])
+                midi.addEvent (juce::MidiMessage::noteOn (1, n, 0.8f), 0);
+        }
+        if (b % blocksPerChord == blocksPerChord / 2)
+        {
+            const int c = (b / blocksPerChord) % 4;
+            for (int n : chords[c])
+                midi.addEvent (juce::MidiMessage::noteOff (1, n), 0);
+        }
+        // Second half: switch to Legato unison with the bandpass filter and heavier fold.
+        if (b == totalBlocks / 2)
+        {
+            set (p, "voiceMode", 4);
+            set (p, "filterMode", 1);
+            set (p, "fold", 0.8f);
+        }
+
+        p.processBlock (buffer, midi);
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            recording.copyFrom (ch, b * block, buffer, ch, 0, block);
+            for (int i = 0; i < block; ++i)
+            {
+                const double s = buffer.getSample (ch, i);
+                finite = finite && std::isfinite (s);
+                peak = std::max (peak, std::abs (s));
+                sumSq += s * s;
+            }
+        }
+    }
+
+    const double elapsed = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
+    const double rms = std::sqrt (sumSq / (2.0 * totalBlocks * block));
+    std::printf ("rendered %.1f s in %.3f s  →  %.1f%% of one core (realtime = 100%%)\n", seconds, elapsed, 100.0 * elapsed / seconds);
+    std::printf ("peak %.3f (%.1f dBFS), rms %.3f (%.1f dBFS), finite: %s\n",
+                 peak, 20.0 * std::log10 (peak), rms, 20.0 * std::log10 (rms), finite ? "yes" : "NO");
+
+    if (argc > 1)
+    {
+        juce::File out = juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]);
+        out.deleteFile();
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (out);
+        auto writer = wav.createWriterFor (stream, juce::AudioFormatWriterOptions {}
+                                                       .withSampleRate (sr)
+                                                       .withNumChannels (2)
+                                                       .withBitsPerSample (24));
+        if (writer != nullptr)
+        {
+            writer->writeFromAudioSampleBuffer (recording, 0, recording.getNumSamples());
+            std::printf ("wrote %s\n", out.getFullPathName().toRawUTF8());
+        }
+    }
+    return finite ? 0 : 1;
+}

@@ -13,6 +13,34 @@ Each entry: what changed, what's broken, how to roll back.
 
 ## Code
 
+### v1.4 — 2026-09-28 — Global section, real filter, wavefolder
+**Changed**
+- Voices now run **4× oversampled** (two halfband FIR stages back down: flat to 18 kHz, aliasing ≥ 60 dB down).
+- **OSC Level**: 0–50% is a clean level for the main oscillators; above 50% the mix is driven into a soft saturator.
+- **Sub oscillator** per voice: level, −1/−2 octave, sine/square; follows the voice's octave and glide.
+- **Pink noise** (shared source) through a **tilt EQ** pivoting at 800 Hz, bipolar **Noise Color** (±6 dB per side).
+- **Filter** replaced with a 4-pole ladder (TPT, tanh in the feedback):
+  - Lowpass 24 dB/oct; resonance drives the saturator; self-oscillates within ~1 cent of the cutoff.
+  - Bandpass: ladder bandpass tap + 15% of the 12 dB lowpass, hotter resonance.
+  - **Filter Key Track** 0–100% (100% = cutoff follows pitch 1:1, reference middle C).
+- **Wavefolder** (sine folder, West-Coast style) after the filter, 0 = exact bypass.
+- Fast tanh (rational approximation, ≤ 1e-4 error) in the voice path — voice CPU down ~35%.
+- `devtools/RenderCheck.cpp` (`-DROTOR_BUILD_DEVTOOLS=ON`): offline render of the full plugin, prints CPU/peak/RMS, can write a WAV.
+- v1.1's 12 dB `LowpassFilter` is deprecated but kept (with its tests), per the no-delete rule.
+- New parameters: `oscLevel`, `subLevel`, `subOctave`, `subWaveform`, `noiseLevel`, `noiseColor`, `filterMode`, `keyTrack`, `fold`.
+  `resonance` now drives the ladder (same ID, stronger effect).
+- 74 unit tests (19 new: ladder response/self-oscillation/stability, key tracking, pink noise spectrum, tilt EQ, overdrive,
+  wavefolder, decimator passband/stopband, sub octave, noise path).
+
+**Validated**: unit tests pass, Linux pluginval passes at strictness 5 and 10, macOS workflow green (pluginval + auval).
+Full-plugin render: 5 voices on a heavy patch ≈ 11% of one 2.1 GHz cloud core, peak −2.3 dBFS, no NaNs.
+
+**Broken / not yet done**: the bandpass is louder than the lowpass at high resonance (self-oscillation ~16 dB hotter) — tune by ear.
+Wavefolder is a single global knob until it becomes a mod destination (v1.5) and a wildcard slider (v1.6).
+New guesses logged in `OPEN_QUESTIONS.md`.
+
+**Roll back**: `git checkout v1.3`.
+
 ### v1.3 — 2026-09-28 — Unison modes: Staccato, Legato, Mono
 **Changed**
 - Voice Mode gains **Staccato**, **Legato**, **Mono** (appended after Forward/Backward/Random, so saved v1.2 settings keep their mode).

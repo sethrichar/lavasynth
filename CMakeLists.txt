@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(ROTOR_BUILD_TESTS "Build DSP unit tests" ON)
+option(ROTOR_BUILD_DEVTOOLS "Build the offline render/CPU check tool" OFF)
 
 include(FetchContent)
 
@@ -61,6 +62,24 @@ target_link_libraries(Rotor
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+if(ROTOR_BUILD_DEVTOOLS)
+    juce_add_console_app(RotorRender PRODUCT_NAME "RotorRender")
+    target_sources(RotorRender PRIVATE
+        devtools/RenderCheck.cpp
+        src/plugin/PluginProcessor.cpp
+        src/plugin/Parameters.cpp)
+    target_include_directories(RotorRender PRIVATE src)
+    target_compile_definitions(RotorRender PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JucePlugin_Name="Rotor")
+    target_link_libraries(RotorRender PRIVATE
+        rotor_dsp
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_recommended_config_flags)
+endif()
 
 if(ROTOR_BUILD_TESTS)
     enable_testing()

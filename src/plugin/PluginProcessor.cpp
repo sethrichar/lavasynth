@@ -27,9 +27,18 @@ RotorAudioProcessor::RotorAudioProcessor()
     roundRobinResetParam = state.getRawParameterValue (roundRobinReset);
     unisonGraceParam = state.getRawParameterValue (unisonGrace);
     monoPriorityParam = state.getRawParameterValue (monoPriority);
+    oscLevelParam = state.getRawParameterValue (oscLevel);
+    subLevelParam = state.getRawParameterValue (subLevel);
+    subOctaveParam = state.getRawParameterValue (subOctave);
+    subWaveformParam = state.getRawParameterValue (subWaveform);
+    noiseLevelParam = state.getRawParameterValue (noiseLevel);
+    noiseColorParam = state.getRawParameterValue (noiseColor);
     glideParam = state.getRawParameterValue (glide);
+    filterModeParam = state.getRawParameterValue (filterMode);
     cutoffParam = state.getRawParameterValue (cutoff);
     resonanceParam = state.getRawParameterValue (resonance);
+    keyTrackParam = state.getRawParameterValue (keyTrack);
+    foldParam = state.getRawParameterValue (fold);
     attackParam = state.getRawParameterValue (attack);
     decayParam = state.getRawParameterValue (decay);
     sustainParam = state.getRawParameterValue (sustain);
@@ -46,17 +55,30 @@ bool RotorAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) co
 void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
 {
     for (auto& v : voices)
-        v.prepare (sampleRate);
+        v.prepare (sampleRate * rotor::Decimator4x::factor);
+    decimator.reset();
+    noise.reset();
+    noiseTilt.setSampleRate (sampleRate);
+    noiseTilt.reset();
+    previousNoise = 0.0f;
     allocator.reset();
     allocator.setGraceSamples ((int) (rotor::VoiceAllocator::defaultGraceSeconds * sampleRate));
 
     // Control-rate smoothers tick once per control block, the level smoother once per sample.
     const double controlRate = sampleRate / controlBlockSize;
-    smoothedCutoff.reset (controlRate, smoothingSeconds);
-    smoothedResonance.reset (controlRate, smoothingSeconds);
+    auto initControl = [controlRate] (auto& smoother, std::atomic<float>* param)
+    {
+        smoother.reset (controlRate, smoothingSeconds);
+        smoother.setCurrentAndTargetValue (param->load());
+    };
+    initControl (smoothedCutoff, cutoffParam);
+    initControl (smoothedResonance, resonanceParam);
+    initControl (smoothedOscLevel, oscLevelParam);
+    initControl (smoothedSubLevel, subLevelParam);
+    initControl (smoothedNoiseLevel, noiseLevelParam);
+    initControl (smoothedNoiseColor, noiseColorParam);
+    initControl (smoothedFold, foldParam);
     smoothedLevel.reset (sampleRate, smoothingSeconds);
-    smoothedCutoff.setCurrentAndTargetValue (cutoffParam->load());
-    smoothedResonance.setCurrentAndTargetValue (resonanceParam->load());
     smoothedLevel.setCurrentAndTargetValue (levelParam->load());
 
     updateVoiceParameters();
@@ -70,10 +92,20 @@ void RotorAudioProcessor::updateVoiceParameters()
     allocator.setGracePeriod (unisonGraceParam->load() >= 0.5f);
     allocator.setMonoPriority (static_cast<Allocator::MonoPriority> (juce::jlimit (0, 2, (int) monoPriorityParam->load())));
 
+    noiseTilt.setColor (smoothedNoiseColor.getNextValue());
+
     rotor::Voice::Parameters p;
+    p.oscLevel = smoothedOscLevel.getNextValue();
+    p.subLevel = smoothedSubLevel.getNextValue();
+    p.subOctave = subOctaveParam->load() >= 0.5f ? 2 : 1;
+    p.subWaveform = subWaveformParam->load() >= 0.5f ? rotor::Voice::SubWaveform::square : rotor::Voice::SubWaveform::sine;
+    p.noiseLevel = smoothedNoiseLevel.getNextValue();
+    p.glideSecondsPerOctave = glideParam->load();
+    p.filterMode = filterModeParam->load() >= 0.5f ? rotor::LadderFilter::Mode::bandpass : rotor::LadderFilter::Mode::lowpass;
     p.cutoffHz = smoothedCutoff.getNextValue();
     p.resonance = smoothedResonance.getNextValue();
-    p.glideSecondsPerOctave = glideParam->load();
+    p.keyTrack = keyTrackParam->load();
+    p.fold = smoothedFold.getNextValue();
     p.amp.attackSeconds = attackParam->load();
     p.amp.decaySeconds = decayParam->load();
     p.amp.sustainLevel = sustainParam->load();
@@ -100,6 +132,11 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     smoothedCutoff.setTargetValue (cutoffParam->load());
     smoothedResonance.setTargetValue (resonanceParam->load());
+    smoothedOscLevel.setTargetValue (oscLevelParam->load());
+    smoothedSubLevel.setTargetValue (subLevelParam->load());
+    smoothedNoiseLevel.setTargetValue (noiseLevelParam->load());
+    smoothedNoiseColor.setTargetValue (noiseColorParam->load());
+    smoothedFold.setTargetValue (foldParam->load());
     smoothedLevel.setTargetValue (levelParam->load());
 
     const int numSamples = buffer.getNumSamples();
@@ -131,14 +168,26 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
 void RotorAudioProcessor::render (float* left, float* right, int numSamples)
 {
+    constexpr int os = rotor::Decimator4x::factor;
+    float block[os];
+
     for (int i = 0; i < numSamples; ++i)
     {
-        float sum = 0.0f;
-        for (auto& v : voices)
-            sum += v.process();
+        // Noise is made at the base rate and linearly interpolated up to the voice rate.
+        const float n = noiseTilt.process (noise.process());
+
+        for (int j = 0; j < os; ++j)
+        {
+            const float noiseSample = previousNoise + (n - previousNoise) * (float) (j + 1) / (float) os;
+            float sum = 0.0f;
+            for (auto& v : voices)
+                sum += v.process (noiseSample);
+            block[j] = sum;
+        }
+        previousNoise = n;
 
         // v1.6 adds the stereo spreader; until then voices are summed to the centre.
-        const float s = sum * voiceSumGain * smoothedLevel.getNextValue();
+        const float s = decimator.process (block) * voiceSumGain * smoothedLevel.getNextValue();
         left[i] = s;
         if (right != nullptr)
             right[i] = s;
