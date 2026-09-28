@@ -16,8 +16,9 @@ namespace
         std::vector<int> used;
         for (int i = 0; i < count; ++i)
         {
-            used.push_back (a.noteOn (firstNote + i));
-            a.noteOff (firstNote + i);
+            const int note = (firstNote + i) % 128;
+            used.push_back (a.noteOn (note).firstTriggered());
+            a.noteOff (note);
         }
         return used;
     }
@@ -27,7 +28,7 @@ namespace
     {
         std::vector<int> used;
         for (int i = 0; i < count; ++i)
-            used.push_back (a.noteOn (firstNote + i));
+            used.push_back (a.noteOn (firstNote + i).firstTriggered());
         return used;
     }
 } // namespace
@@ -81,8 +82,8 @@ TEST_CASE ("All voices disabled → note is dropped", "[allocator]")
     a.setMode (mode);
     for (int i = 0; i < rotor::numVoices; ++i)
         a.setVoiceEnabled (i, false);
-    CHECK (a.noteOn (60) == -1);
-    CHECK (a.noteOff (60) == 0);
+    CHECK (a.noteOn (60).firstTriggered() == -1);
+    CHECK (a.noteOff (60).released() == 0);
 }
 
 TEST_CASE ("Rotation steals: the sixth held note takes voice 1", "[allocator]")
@@ -92,22 +93,22 @@ TEST_CASE ("Rotation steals: the sixth held note takes voice 1", "[allocator]")
     CHECK (a.getVoiceNote (0) == 65);
 
     // Lifting the stolen key (60) releases nothing: voice 1 now belongs to 65.
-    CHECK (a.noteOff (60) == 0);
+    CHECK (a.noteOff (60).released() == 0);
     CHECK (a.isVoiceGateOn (0));
 
     // Lifting 65 releases voice 1.
-    CHECK (a.noteOff (65) == VoiceAllocator::maskOf (0));
+    CHECK (a.noteOff (65).released() == VoiceAllocator::maskOf (0));
 }
 
 TEST_CASE ("Note off releases only the voice holding that key", "[allocator]")
 {
     VoiceAllocator a;
     playHeld (a, 3);
-    CHECK (a.noteOff (61) == VoiceAllocator::maskOf (1));
+    CHECK (a.noteOff (61).released() == VoiceAllocator::maskOf (1));
     CHECK (a.isVoiceGateOn (0));
     CHECK_FALSE (a.isVoiceGateOn (1));
     CHECK (a.isVoiceGateOn (2));
-    CHECK (a.noteOff (99) == 0); // never pressed
+    CHECK (a.noteOff (99).released() == 0); // never pressed
 }
 
 TEST_CASE ("Round-Robin Reset", "[allocator]")
@@ -117,23 +118,23 @@ TEST_CASE ("Round-Robin Reset", "[allocator]")
         VoiceAllocator a;
         a.setRoundRobinReset (false);
         playStaccato (a, 3); // voices 1, 2, 3
-        CHECK (a.noteOn (70) == 3);
+        CHECK (a.noteOn (70).firstTriggered() == 3);
     }
     SECTION ("on: returns to voice 1 when all keys are released")
     {
         VoiceAllocator a;
         a.setRoundRobinReset (true);
         playStaccato (a, 3);
-        CHECK (a.noteOn (70) == 0);
+        CHECK (a.noteOn (70).firstTriggered() == 0);
     }
     SECTION ("on: does not reset while any key is still held")
     {
         VoiceAllocator a;
         a.setRoundRobinReset (true);
-        a.noteOn (60);         // voice 1, held
-        a.noteOn (61);         // voice 2
-        a.noteOff (61);        // 60 still held
-        CHECK (a.noteOn (62) == 2);
+        a.noteOn (60).firstTriggered();         // voice 1, held
+        a.noteOn (61).firstTriggered();         // voice 2
+        a.noteOff (61).released();        // 60 still held
+        CHECK (a.noteOn (62).firstTriggered() == 2);
     }
     SECTION ("on: resets to the first enabled voice when voice 1 is off")
     {
@@ -141,7 +142,7 @@ TEST_CASE ("Round-Robin Reset", "[allocator]")
         a.setRoundRobinReset (true);
         a.setVoiceEnabled (0, false);
         playStaccato (a, 2);
-        CHECK (a.noteOn (70) == 1);
+        CHECK (a.noteOn (70).firstTriggered() == 1);
     }
     SECTION ("on, backward: resets to voice 1, then continues 5, 4, …")
     {
@@ -150,8 +151,8 @@ TEST_CASE ("Round-Robin Reset", "[allocator]")
         a.setRoundRobinReset (true);
         playStaccato (a, 3);
         CHECK (playStaccato (a, 3) == std::vector<int> { 0, 0, 0 }); // every note is after a full release
-        a.noteOn (80);
-        CHECK (a.noteOn (81) == 4);
+        a.noteOn (80).firstTriggered();
+        CHECK (a.noteOn (81).firstTriggered() == 4);
     }
     SECTION ("on: allNotesOff also resets")
     {
@@ -159,7 +160,7 @@ TEST_CASE ("Round-Robin Reset", "[allocator]")
         a.setRoundRobinReset (true);
         playHeld (a, 3);
         a.allNotesOff();
-        CHECK (a.noteOn (70) == 0);
+        CHECK (a.noteOn (70).firstTriggered() == 0);
     }
 }
 
@@ -199,20 +200,20 @@ TEST_CASE ("Disabling a voice mid-note releases it; enabling mid-note does not t
     VoiceAllocator a;
     playHeld (a, 3); // voices 1..3 hold 60..62
 
-    CHECK (a.setVoiceEnabled (1, false) == VoiceAllocator::maskOf (1));
+    CHECK (a.setVoiceEnabled (1, false).released() == VoiceAllocator::maskOf (1));
     CHECK_FALSE (a.isVoiceGateOn (1));
-    CHECK (a.setVoiceEnabled (1, false) == 0);   // already off: no change
-    CHECK (a.noteOff (61) == 0);                 // its key lifts later: nothing left to release
+    CHECK (a.setVoiceEnabled (1, false).released() == 0);   // already off: no change
+    CHECK (a.noteOff (61).released() == 0);                 // its key lifts later: nothing left to release
 
-    CHECK (a.setVoiceEnabled (1, true) == 0);
+    CHECK (a.setVoiceEnabled (1, true).released() == 0);
     CHECK_FALSE (a.isVoiceGateOn (1));
 
     // Disabling an idle voice releases nothing.
-    CHECK (a.setVoiceEnabled (4, false) == 0);
+    CHECK (a.setVoiceEnabled (4, false).released() == 0);
 
     // Rotation continues from voice 3 and skips the disabled voice 5.
-    CHECK (a.noteOn (70) == 3);
-    CHECK (a.noteOn (71) == 0);
+    CHECK (a.noteOn (70).firstTriggered() == 3);
+    CHECK (a.noteOn (71).firstTriggered() == 0);
 }
 
 TEST_CASE ("Disabling the last-used voice keeps the rotation going", "[allocator]")
@@ -220,7 +221,7 @@ TEST_CASE ("Disabling the last-used voice keeps the rotation going", "[allocator
     VoiceAllocator a;
     playStaccato (a, 2);          // last used: voice 2
     a.setVoiceEnabled (1, false);
-    CHECK (a.noteOn (70) == 2);
+    CHECK (a.noteOn (70).firstTriggered() == 2);
 }
 
 TEST_CASE ("Switching mode mid-stream continues from the last-used voice", "[allocator]")
@@ -228,17 +229,17 @@ TEST_CASE ("Switching mode mid-stream continues from the last-used voice", "[all
     VoiceAllocator a;
     playStaccato (a, 3);          // last used: voice 3
     a.setMode (Mode::backward);
-    CHECK (a.noteOn (70) == 1);
+    CHECK (a.noteOn (70).firstTriggered() == 1);
 }
 
 TEST_CASE ("Repeated note-on of a held key is counted once for Round-Robin Reset", "[allocator]")
 {
     VoiceAllocator a;
     a.setRoundRobinReset (true);
-    a.noteOn (60);
-    a.noteOn (60);                // same key again (e.g. from a sequencer)
+    a.noteOn (60).firstTriggered();
+    a.noteOn (60).firstTriggered();                // same key again (e.g. from a sequencer)
     CHECK (a.getNumKeysDown() == 1);
-    CHECK (a.noteOff (60) == (VoiceAllocator::maskOf (0) | VoiceAllocator::maskOf (1)));
+    CHECK (a.noteOff (60).released() == (VoiceAllocator::maskOf (0) | VoiceAllocator::maskOf (1)));
     CHECK (a.getNumKeysDown() == 0);
-    CHECK (a.noteOn (61) == 0);
+    CHECK (a.noteOn (61).firstTriggered() == 0);
 }

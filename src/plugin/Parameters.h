@@ -13,6 +13,8 @@ namespace rotor::params
 // Voice section
 inline constexpr const char* voiceMode = "voiceMode";
 inline constexpr const char* roundRobinReset = "roundRobinReset";
+inline constexpr const char* unisonGrace = "unisonGrace";
+inline constexpr const char* monoPriority = "monoPriority";
 
 // Per voice: IDs are e.g. "voice1Level" … "voice5Level" (1-based, as on the panel).
 juce::String voiceOn (int voiceIndex);

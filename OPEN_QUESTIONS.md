@@ -10,6 +10,10 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 - [ ] Round-Robin Reset in Random mode: any effect? (Assumed: none.)
 - [ ] Turning a voice off while it sounds: release normally or cut immediately? (Assumed: normal release.)
 - [ ] Unison with 2–4 held notes: how are the 5 voices split, and which voice numbers go to which note?
+  (Assumed: voices in panel order take the held notes in press order, cycling — 2 notes → voices 1,3,5 on the first note, 2,4 on the second.)
+- [ ] Unison Staccato: when one key of several is lifted and voices move to the remaining notes, do they retrigger? (Assumed: no, they just move.)
+- [ ] Mono: does every new key retrigger, or only when the sounding note changes? (Assumed: only when it changes.)
+- [ ] Unison Grace Period: how long is it? (Assumed: 80 ms — `VoiceAllocator::defaultGraceSeconds`.)
 - [ ] Does unison add any detune/spread by itself, or only via the wildcard params?
 
 ## Voices / global

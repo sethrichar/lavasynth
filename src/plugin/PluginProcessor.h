@@ -41,7 +41,7 @@ public:
 
 private:
     void handleMidi (const juce::MidiMessage& message);
-    void releaseVoices (rotor::VoiceAllocator::VoiceMask mask);
+    void apply (const rotor::VoiceAllocator::Result& result);
     void updateVoiceParameters();
     void render (float* left, float* right, int numSamples);
 
@@ -58,6 +58,8 @@ private:
 
     std::atomic<float>* voiceModeParam = nullptr;
     std::atomic<float>* roundRobinResetParam = nullptr;
+    std::atomic<float>* unisonGraceParam = nullptr;
+    std::atomic<float>* monoPriorityParam = nullptr;
     std::atomic<float>* glideParam = nullptr;
     std::atomic<float>* cutoffParam = nullptr;
     std::atomic<float>* resonanceParam = nullptr;
@@ -69,6 +71,7 @@ private:
 
     rotor::VoiceAllocator allocator;
     std::array<rotor::Voice, rotor::numVoices> voices;
+    float lastVelocity = 1.0f;
 
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> smoothedCutoff;
     juce::SmoothedValue<float> smoothedResonance;

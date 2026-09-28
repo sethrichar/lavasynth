@@ -75,6 +75,14 @@ public:
         env.noteOn();
     }
 
+    // Unison redistribution: change pitch (gliding if enabled) without retriggering the envelopes.
+    void moveTo (int midiNote)
+    {
+        currentNote = midiNote;
+        glide.setTarget (midiNote);
+        updateFrequency();
+    }
+
     void noteOff() { env.noteOff(); }
 
     bool isActive() const { return env.isActive(); }
