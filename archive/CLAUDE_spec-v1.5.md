@@ -2,7 +2,7 @@
 
 > Working title only. Do NOT use "Katla", "Genki", or the Icelandic parameter names in code identifiers,
 > UI, bundle IDs, presets, or marketing. The Icelandic names appear below ONLY as a reference key to the manual.
-> Spec revision: 1.6 (working). Sources: the Katla User Manual and controls cheat sheet (kept on the owner's Mac only —
+> Spec revision: 1.5 (working). Sources: the Katla User Manual and controls cheat sheet (kept on the owner's Mac only —
 > NOT in this public repo). This spec is the complete reference; everything needed from those documents is summarized here.
 > Previous specs: `archive/`. Items the manual does not answer are marked **[OPEN]** and tracked in `OPEN_QUESTIONS.md`.
 
@@ -76,7 +76,7 @@ Plus an **on/off** button per voice. Band-limit everything (polyBLEP/minBLEP or 
 - **Noise/EXT** — pink noise level; when EXT on, controls external input level instead.
   Noise/EXT passes through a **tilt EQ** (pivot 800 Hz) set by a bipolar **Color** slider (center = flat).
 - **Glide** — time scales with interval size (2-octave leap takes noticeably longer than a half step);
-  descending glides take ~10% longer than ascending. Each voice glides from its own previous note (not the last key played).
+  descending glides take ~10% longer than ascending.
 
 ## Voice allocation (6 modes)
 Round-Robin (each note assigned to the next voice in sequence):

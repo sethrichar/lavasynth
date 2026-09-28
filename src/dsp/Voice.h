@@ -69,7 +69,7 @@ public:
             osc.reset();
         currentNote = midiNote;
         velocity = newVelocity;
-        // OPEN: glide source — assumed each voice glides from its own previous note.
+        // Each voice glides from its own previous note (confirmed by owner).
         glide.setTarget (midiNote);
         updateFrequency();
         env.noteOn();
