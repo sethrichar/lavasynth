@@ -6,6 +6,7 @@
 namespace rotor
 {
 
+// DEPRECATED (v1.4): replaced by LadderFilter. Kept, with its tests, per the no-delete rule.
 // Simple v1.1 lowpass: 2-pole TPT state-variable filter (Zavalishin).
 // Replaced in v1.4 by the 24 dB ladder + bandpass blend with resonance drive.
 class LowpassFilter

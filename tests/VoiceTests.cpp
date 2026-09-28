@@ -106,3 +106,75 @@ TEST_CASE ("Voice glides from its previous note", "[voice]")
         v.process();
     CHECK (v.getCurrentPitch() == 84.0);
 }
+
+TEST_CASE ("Sub oscillator plays one or two octaves down and follows the voice", "[voice]")
+{
+    // Main osc off, sub only, filter wide open: count the sub's zero crossings.
+    auto subHz = [] (int subOctave, int voiceOctave)
+    {
+        Voice v;
+        v.prepare (48000.0);
+        Voice::Parameters p;
+        p.oscLevel = 0.0;
+        p.subLevel = 1.0;
+        p.subOctave = subOctave;
+        p.octave = voiceOctave;
+        p.cutoffHz = 20000.0;
+        p.resonance = 0.0;
+        p.amp = { 0.001, 0.1, 1.0, 0.1 };
+        v.setParameters (p);
+        v.noteOn (69, 1.0f); // A4 = 440 Hz
+        for (int i = 0; i < 4800; ++i)
+            v.process();
+        int crossings = 0;
+        float prev = v.process();
+        for (int i = 0; i < 48000; ++i)
+        {
+            const float s = v.process();
+            if (prev < 0.0f && s >= 0.0f)
+                ++crossings;
+            prev = s;
+        }
+        return crossings;
+    };
+    CHECK (std::abs (subHz (1, 0) - 220) <= 2);
+    CHECK (std::abs (subHz (2, 0) - 110) <= 2);
+    CHECK (std::abs (subHz (1, 1) - 440) <= 2);
+}
+
+TEST_CASE ("Noise input only sounds when the noise level is up", "[voice]")
+{
+    auto energy = [] (double noiseLevel)
+    {
+        Voice v;
+        v.prepare (48000.0);
+        Voice::Parameters p;
+        p.oscLevel = 0.0;
+        p.noiseLevel = noiseLevel;
+        v.setParameters (p);
+        v.noteOn (60, 1.0f);
+        double e = 0.0;
+        for (int i = 0; i < 4800; ++i)
+        {
+            const float s = v.process ((i % 7) < 3 ? 0.5f : -0.4f);
+            e += s * s;
+        }
+        return e;
+    };
+    CHECK (energy (0.0) == 0.0);
+    CHECK (energy (1.0) > 1.0);
+}
+
+TEST_CASE ("Filter key tracking follows the played pitch", "[voice]")
+{
+    Voice v;
+    v.prepare (192000.0);
+    Voice::Parameters p;
+    p.cutoffHz = 1000.0;
+    p.keyTrack = 1.0;
+    v.setParameters (p);
+    v.noteOn (72, 1.0f);
+    CHECK (v.getFilterCutoff() == Catch::Approx (2000.0));
+    v.moveTo (48);
+    CHECK (v.getFilterCutoff() == Catch::Approx (500.0));
+}

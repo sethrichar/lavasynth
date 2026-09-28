@@ -24,6 +24,16 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 
 - [ ] Glide curve and knob range. (Assumed: linear in pitch, knob = 0–5 s per octave.)
 
+- [ ] OSC Level overdrive: curve and maximum drive. (Assumed: clean below 50%; above, crossfade into tanh with up to +14 dB drive.)
+- [ ] Noise Color tilt range. (Assumed: ±6 dB per side at full Color, i.e. 12 dB end to end.)
+- [ ] Is the noise one shared source for all voices or independent per voice? (Assumed: one shared source, like EXT.)
+
+## Filter / wavefolder
+- [ ] Bandpass slope: the manual's "36 dB/oct bandpass". (Assumed: ladder bandpass, 12 dB/oct each side, + 15% 12 dB lowpass.)
+- [ ] Key-tracking range and reference note. (Assumed: 0–100%, 100% = 1:1 tracking, cutoff knob = cutoff at middle C.)
+- [ ] Resonance overdrive amount and bandpass vs lowpass loudness at high resonance.
+- [ ] Wavefolder depth and curve. (Assumed: sine folder, up to ~3.5 folds on a full-scale input.)
+
 ## Modulation (priority 2)
 - [ ] Envelope minimum times and slider curves. (v1.1 assumes 1 ms minimum, exponential sliders; attack max 20 s, decay max 60 s, release max 1 h.)
 - [ ] How much sustain shortens A/D in loop mode.

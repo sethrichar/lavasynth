@@ -23,11 +23,22 @@ juce::String voiceOctave (int voiceIndex);
 juce::String voiceWaveform (int voiceIndex);
 
 // Global
+inline constexpr const char* oscLevel = "oscLevel";
+inline constexpr const char* subLevel = "subLevel";
+inline constexpr const char* subOctave = "subOctave";
+inline constexpr const char* subWaveform = "subWaveform";
+inline constexpr const char* noiseLevel = "noiseLevel";
+inline constexpr const char* noiseColor = "noiseColor";
 inline constexpr const char* glide = "glide";
 
 // Filter
+inline constexpr const char* filterMode = "filterMode";
 inline constexpr const char* cutoff = "cutoff";
 inline constexpr const char* resonance = "resonance";
+inline constexpr const char* keyTrack = "keyTrack";
+
+// Wavefolder
+inline constexpr const char* fold = "fold";
 
 // Amp envelope
 inline constexpr const char* attack = "attack";
