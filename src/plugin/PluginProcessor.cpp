@@ -25,6 +25,8 @@ RotorAudioProcessor::RotorAudioProcessor()
     }
     voiceModeParam = state.getRawParameterValue (voiceMode);
     roundRobinResetParam = state.getRawParameterValue (roundRobinReset);
+    unisonGraceParam = state.getRawParameterValue (unisonGrace);
+    monoPriorityParam = state.getRawParameterValue (monoPriority);
     glideParam = state.getRawParameterValue (glide);
     cutoffParam = state.getRawParameterValue (cutoff);
     resonanceParam = state.getRawParameterValue (resonance);
@@ -46,6 +48,7 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
     for (auto& v : voices)
         v.prepare (sampleRate);
     allocator.reset();
+    allocator.setGraceSamples ((int) (rotor::VoiceAllocator::defaultGraceSeconds * sampleRate));
 
     // Control-rate smoothers tick once per control block, the level smoother once per sample.
     const double controlRate = sampleRate / controlBlockSize;
@@ -61,8 +64,11 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
 
 void RotorAudioProcessor::updateVoiceParameters()
 {
-    allocator.setMode (static_cast<rotor::VoiceAllocator::Mode> (juce::jlimit (0, 2, (int) voiceModeParam->load())));
+    using Allocator = rotor::VoiceAllocator;
+    apply (allocator.setMode (static_cast<Allocator::Mode> (juce::jlimit (0, 5, (int) voiceModeParam->load()))));
     allocator.setRoundRobinReset (roundRobinResetParam->load() >= 0.5f);
+    allocator.setGracePeriod (unisonGraceParam->load() >= 0.5f);
+    allocator.setMonoPriority (static_cast<Allocator::MonoPriority> (juce::jlimit (0, 2, (int) monoPriorityParam->load())));
 
     rotor::Voice::Parameters p;
     p.cutoffHz = smoothedCutoff.getNextValue();
@@ -76,13 +82,15 @@ void RotorAudioProcessor::updateVoiceParameters()
     for (int i = 0; i < rotor::numVoices; ++i)
     {
         const auto& vp = voiceParams[(size_t) i];
-        releaseVoices (allocator.setVoiceEnabled (i, vp.on->load() >= 0.5f));
-
         p.waveform = static_cast<rotor::Waveform> (juce::jlimit (0, rotor::numWaveforms - 1, (int) vp.waveform->load()));
         p.octave = juce::jlimit (-2, 2, juce::roundToInt (vp.octave->load()));
         p.level = vp.level->load();
         voices[(size_t) i].setParameters (p);
     }
+
+    // After the voices have their new settings, so a voice switched on joins with them.
+    for (int i = 0; i < rotor::numVoices; ++i)
+        apply (allocator.setVoiceEnabled (i, voiceParams[(size_t) i].on->load() >= 0.5f));
 }
 
 void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -114,6 +122,7 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
         updateVoiceParameters();
         render (left + pos, right != nullptr ? right + pos : nullptr, end - pos);
+        apply (allocator.advance (end - pos));
         pos = end;
     }
     for (; midiIt != midi.cend(); ++midiIt)
@@ -140,26 +149,35 @@ void RotorAudioProcessor::handleMidi (const juce::MidiMessage& m)
 {
     if (m.isNoteOn())
     {
-        const int v = allocator.noteOn (m.getNoteNumber());
         // OPEN: velocity response (does the hardware respond to velocity at all?).
-        if (v >= 0)
-            voices[(size_t) v].noteOn (m.getNoteNumber(), m.getFloatVelocity());
+        lastVelocity = m.getFloatVelocity();
+        apply (allocator.noteOn (m.getNoteNumber()));
     }
     else if (m.isNoteOff())
     {
-        releaseVoices (allocator.noteOff (m.getNoteNumber()));
+        apply (allocator.noteOff (m.getNoteNumber()));
     }
     else if (m.isAllNotesOff() || m.isAllSoundOff())
     {
-        releaseVoices (allocator.allNotesOff());
+        apply (allocator.allNotesOff());
     }
 }
 
-void RotorAudioProcessor::releaseVoices (rotor::VoiceAllocator::VoiceMask mask)
+void RotorAudioProcessor::apply (const rotor::VoiceAllocator::Result& result)
 {
+    using Type = rotor::VoiceAllocator::Action::Type;
     for (int i = 0; i < rotor::numVoices; ++i)
-        if ((mask & rotor::VoiceAllocator::maskOf (i)) != 0)
-            voices[(size_t) i].noteOff();
+    {
+        const auto& action = result.actions[(size_t) i];
+        auto& voice = voices[(size_t) i];
+        switch (action.type)
+        {
+            case Type::none: break;
+            case Type::trigger: voice.noteOn (action.note, lastVelocity); break;
+            case Type::move: voice.moveTo (action.note); break;
+            case Type::release: voice.noteOff(); break;
+        }
+    }
 }
 
 juce::AudioProcessorEditor* RotorAudioProcessor::createEditor()

@@ -38,9 +38,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { voiceMode, version }, "Voice Mode",
-        StringArray { "Forward", "Backward", "Random" }, 0));
+        StringArray { "Forward", "Backward", "Random", "Staccato", "Legato", "Mono" }, 0));
     layout.add (std::make_unique<AudioParameterBool> (
         ParameterID { roundRobinReset, version }, "Round-Robin Reset", false));
+    layout.add (std::make_unique<AudioParameterBool> (
+        ParameterID { unisonGrace, version }, "Unison Grace Period", false));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { monoPriority, version }, "Mono Note Priority",
+        StringArray { "Last", "Lowest", "Highest" }, 0));
 
     for (int i = 0; i < rotor::numVoices; ++i)
     {

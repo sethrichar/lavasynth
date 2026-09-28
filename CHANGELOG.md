@@ -8,9 +8,29 @@ Each entry: what changed, what's broken, how to roll back.
 - 2026-09-28 — Spec rev 1.2: rewritten from the user manual. (`archive/CLAUDE_spec-v1.2.md`)
 - 2026-09-28 — Spec rev 1.3: control details from the cheat sheet. (`archive/CLAUDE_spec-v1.3.md`)
 - 2026-09-28 — Spec rev 1.4: cloud (Linux) + GitHub Actions (macOS) build workflow. (`archive/CLAUDE_spec-v1.4.md`)
-- 2026-09-28 — Spec rev 1.5: repo is public; spec made self-contained, manufacturer docs kept off-repo.
+- 2026-09-28 — Spec rev 1.5: repo is public; spec made self-contained, manufacturer docs kept off-repo. (`archive/CLAUDE_spec-v1.5.md`)
+- 2026-09-28 — Spec rev 1.6: glide source confirmed (each voice glides from its own previous note).
 
 ## Code
+
+### v1.3 — 2026-09-28 — Unison modes: Staccato, Legato, Mono
+**Changed**
+- Voice Mode gains **Staccato**, **Legato**, **Mono** (appended after Forward/Backward/Random, so saved v1.2 settings keep their mode).
+- Unison: all enabled voices spread over the held notes, re-spread whenever the key count changes; at most 5 notes (newest win).
+  - Staccato: every voice retriggers on every key press.
+  - Legato: voices only change pitch (gliding if Glide is on) while any key is held; retrigger after all keys are released.
+  - Mono: all voices on one note; **Mono Note Priority** Last (default) / Lowest / Highest. Retriggers only when the sounding note changes.
+- **Unison Grace Period** option: when you lift keys of a chord, those voices fade out on their own notes; the rest wait 80 ms before
+  re-spreading. Without it, the last key held grabs all voices (monophonic release).
+- Allocator now returns an action per voice (trigger / move / release) so one key can affect several voices.
+- 55 unit tests (18 new unison/mono/grace tests).
+
+**Validated**: unit tests pass, Linux pluginval passes at strictness 5 and 10, macOS workflow green (pluginval + auval).
+
+**Broken / not yet done**: nothing known. New guesses logged in `OPEN_QUESTIONS.md` (voice split, Mono retrigger, grace length,
+whether releasing a key in Staccato retriggers).
+
+**Roll back**: `git checkout v1.2`.
 
 ### v1.2 — 2026-09-28 — 5 voices, Round-Robin allocation, glide
 **Changed**
