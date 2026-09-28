@@ -2,6 +2,7 @@
 
 #include "Parameters.h"
 #include "dsp/Voice.h"
+#include "dsp/VoiceAllocator.h"
 
 #include <array>
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -40,17 +41,24 @@ public:
 
 private:
     void handleMidi (const juce::MidiMessage& message);
-    void noteOn (int note, float velocity);
-    void noteOff (int note);
-    bool removeHeld (int note);
-    void allNotesOff();
+    void releaseVoices (rotor::VoiceAllocator::VoiceMask mask);
     void updateVoiceParameters();
-    void renderVoice (float* left, float* right, int numSamples);
+    void render (float* left, float* right, int numSamples);
 
     juce::AudioProcessorValueTreeState state;
 
-    std::atomic<float>* waveformParam = nullptr;
-    std::atomic<float>* octaveParam = nullptr;
+    struct VoiceParams
+    {
+        std::atomic<float>* on = nullptr;
+        std::atomic<float>* level = nullptr;
+        std::atomic<float>* octave = nullptr;
+        std::atomic<float>* waveform = nullptr;
+    };
+    std::array<VoiceParams, rotor::numVoices> voiceParams;
+
+    std::atomic<float>* voiceModeParam = nullptr;
+    std::atomic<float>* roundRobinResetParam = nullptr;
+    std::atomic<float>* glideParam = nullptr;
     std::atomic<float>* cutoffParam = nullptr;
     std::atomic<float>* resonanceParam = nullptr;
     std::atomic<float>* attackParam = nullptr;
@@ -59,12 +67,8 @@ private:
     std::atomic<float>* releaseParam = nullptr;
     std::atomic<float>* levelParam = nullptr;
 
-    rotor::Voice voice;
-
-    // Held keys, oldest first; last-note priority for the single v1.1 voice.
-    std::array<int, 128> heldNotes {};
-    int numHeld = 0;
-    float lastVelocity = 1.0f;
+    rotor::VoiceAllocator allocator;
+    std::array<rotor::Voice, rotor::numVoices> voices;
 
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> smoothedCutoff;
     juce::SmoothedValue<float> smoothedResonance;

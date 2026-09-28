@@ -6,6 +6,9 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 ## Voice allocation (priority 1)
 - [ ] Round-Robin Random: can the same voice repeat back-to-back? (Assumed: no immediate repeat.)
 - [ ] Round-Robin steal: does the next voice take the note even while it's still sounding? (Assumed: yes.)
+- [ ] Round-Robin Reset in Backward mode: does it return to voice 1 (then 5, 4, …) or to voice 5? (Assumed: voice 1, as the manual says.)
+- [ ] Round-Robin Reset in Random mode: any effect? (Assumed: none.)
+- [ ] Turning a voice off while it sounds: release normally or cut immediately? (Assumed: normal release.)
 - [ ] Unison with 2–4 held notes: how are the 5 voices split, and which voice numbers go to which note?
 - [ ] Does unison add any detune/spread by itself, or only via the wildcard params?
 
@@ -14,6 +17,9 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 - [ ] Does the hardware respond to note velocity (amp level, filter)? (v1.1 assumes velocity scales amp level.)
 - [ ] How voice level/octave "influence the sub-oscillators, filters, LFO, all key-tracking behaviors" beyond the obvious.
 - [ ] Confirm the four distortion stages (assumed: OSC-level overdrive, filter resonance, wavefolder, CMOS drive).
+
+- [ ] Glide: does each voice glide from its own previous note, or from the last note played on the keyboard? (Assumed: its own.)
+- [ ] Glide curve and knob range. (Assumed: linear in pitch, knob = 0–5 s per octave.)
 
 ## Modulation (priority 2)
 - [ ] Envelope minimum times and slider curves. (v1.1 assumes 1 ms minimum, exponential sliders; attack max 20 s, decay max 60 s, release max 1 h.)

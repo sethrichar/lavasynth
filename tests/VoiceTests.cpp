@@ -62,3 +62,47 @@ TEST_CASE ("Every waveform and octave produces finite output", "[voice]")
         }
     }
 }
+
+TEST_CASE ("Voice level scales the output; level 0 is silent", "[voice]")
+{
+    auto energyAt = [] (double level)
+    {
+        Voice v;
+        v.prepare (48000.0);
+        Voice::Parameters p;
+        p.level = level;
+        p.amp = { 0.001, 0.05, 1.0, 0.02 };
+        v.setParameters (p);
+        v.reset(); // start the level smoother at the set level
+        v.noteOn (60, 1.0f);
+        double e = 0.0;
+        for (int i = 0; i < 4800; ++i)
+        {
+            const float s = v.process();
+            e += s * s;
+        }
+        return e;
+    };
+    CHECK (energyAt (0.0) == 0.0);
+    CHECK (energyAt (0.5) == Catch::Approx (0.25 * energyAt (1.0)).epsilon (0.01));
+}
+
+TEST_CASE ("Voice glides from its previous note", "[voice]")
+{
+    Voice v;
+    v.prepare (48000.0);
+    Voice::Parameters p;
+    p.glideSecondsPerOctave = 0.1;
+    p.octave = 1;
+    v.setParameters (p);
+
+    v.noteOn (60, 1.0f);
+    CHECK (v.getCurrentPitch() == 72.0); // first note: no glide, octave +1 applied
+    v.noteOn (72, 1.0f);
+    v.process();
+    CHECK (v.getCurrentPitch() > 72.0);
+    CHECK (v.getCurrentPitch() < 84.0);
+    for (int i = 0; i < 48000; ++i)
+        v.process();
+    CHECK (v.getCurrentPitch() == 84.0);
+}

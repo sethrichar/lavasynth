@@ -9,7 +9,9 @@ add_executable(rotor_tests
     OscillatorTests.cpp
     FilterTests.cpp
     EnvelopeTests.cpp
-    VoiceTests.cpp)
+    VoiceTests.cpp
+    AllocatorTests.cpp
+    GlideTests.cpp)
 
 target_link_libraries(rotor_tests PRIVATE rotor_dsp Catch2::Catch2WithMain)
 
