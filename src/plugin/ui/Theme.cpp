@@ -70,4 +70,33 @@ void drawGlow (juce::Graphics& g, juce::Rectangle<float> area, juce::Colour c, f
     }
 }
 
+void drawDice (juce::Graphics& g, juce::Rectangle<float> area, bool highlighted)
+{
+    // Button face, same style as a preset slot.
+    g.setColour (highlighted ? colours::rose.withAlpha (0.25f) : colours::track);
+    g.fillRoundedRectangle (area, 3.0f);
+    g.setColour (colours::rose.withAlpha (highlighted ? 1.0f : 0.8f));
+    g.drawRoundedRectangle (area, 3.0f, 1.0f);
+
+    // The die: a small rounded square, tilted a touch as if mid-roll, with five pips.
+    const float size = std::min (area.getWidth(), area.getHeight()) * 0.68f;
+    const auto die = juce::Rectangle<float> (size, size).withCentre (area.getCentre());
+    const auto rotate = juce::AffineTransform::rotation (-0.18f, die.getCentreX(), die.getCentreY());
+    juce::Path body;
+    body.addRoundedRectangle (die, size * 0.2f);
+    g.setColour (colours::teal.withAlpha (highlighted ? 0.35f : 0.18f));
+    g.fillPath (body, rotate);
+    g.setColour (colours::teal);
+    g.strokePath (body, juce::PathStrokeType (1.3f), rotate);
+
+    const float pip = size * 0.16f, inset = size * 0.28f;
+    const auto c = die.getCentre();
+    g.setColour (colours::rose);
+    for (auto offset : { juce::Point<float> (-inset, -inset), { inset, -inset }, { 0.0f, 0.0f }, { -inset, inset }, { inset, inset } })
+    {
+        const auto p = (c + offset).transformedBy (rotate);
+        g.fillEllipse (juce::Rectangle<float> (pip, pip).withCentre (p));
+    }
+}
+
 } // namespace rotor::ui

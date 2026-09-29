@@ -10,9 +10,31 @@ Each entry: what changed, what's broken, how to roll back.
 - 2026-09-28 — Spec rev 1.4: cloud (Linux) + GitHub Actions (macOS) build workflow. (`archive/CLAUDE_spec-v1.4.md`)
 - 2026-09-28 — Spec rev 1.5: repo is public; spec made self-contained, manufacturer docs kept off-repo. (`archive/CLAUDE_spec-v1.5.md`)
 - 2026-09-28 — Spec rev 1.6: glide source confirmed (each voice glides from its own previous note). (`archive/CLAUDE_spec-v1.6.md`)
-- 2026-09-29 — Spec rev 1.7: Envelope Curve and Filter Character become permanent selectors (buttons in the final UI).
+- 2026-09-29 — Spec rev 1.7: Envelope Curve and Filter Character become permanent selectors (buttons in the final UI). (`archive/CLAUDE_spec-v1.7.md`)
+- 2026-09-29 — Spec rev 1.8: dice (row + global randomize), panel mode, sync buttons in GLOBAL; milestone v1.10 added.
 
 ## Code
+
+### v1.10 — 2026-09-29 — Dice, panel mode, sync buttons (owner UI feedback)
+**Changed**
+- **Row dice**: a dice button in each row's preset strip (same size as a slot, centred under the 8 slots, above STORE)
+  randomizes that row.
+- **Global dice** ("RANDOM ALL") in the GLOBAL section randomizes all three rows.
+- Randomizing is musical, not noise (`src/plugin/Randomizer.h`): useful ranges, many depths/wildcards/effects left at
+  zero, at least one voice on, global options never touched. 60 random rolls all render at −16 to −3 dBFS peak.
+- **PANEL mode** button (like the hardware): while on, preset loads, row-slot recalls and host program changes are bypassed
+  — the panel sounds exactly as it is. Slots and the preset browser dim; STORE, SAVE and the dice still work. Saved with the
+  session.
+- **ENV SYNC** and **LFO SYNC** are now buttons in the GLOBAL section (removed from Options and the LFO section).
+- Fix (found by a new test): the randomizer treated "attack" as an aftertouch control (both start with "at").
+- 145 unit tests (3 new); preset checks cover dice rolls, row-only dice and panel mode.
+
+**Validated**: unit tests pass, preset checks pass, Linux pluginval passes at strictness 10 (several seeds), macOS workflow
+green (pluginval + auval).
+
+**Broken / not yet done**: nothing known.
+
+**Roll back**: `git checkout v1.9`.
 
 ### v1.9 — 2026-09-29 — Presets and the real UI
 **Changed**

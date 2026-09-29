@@ -38,4 +38,7 @@ public:
 // Small drawing helpers shared by the controls.
 void drawGlow (juce::Graphics&, juce::Rectangle<float> area, juce::Colour, float radius, float alpha);
 
+// The dice icon ("roll the dice" = randomize): a rounded die showing five pips.
+void drawDice (juce::Graphics&, juce::Rectangle<float> area, bool highlighted);
+
 } // namespace rotor::ui

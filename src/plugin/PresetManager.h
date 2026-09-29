@@ -37,6 +37,18 @@ public:
     void recallSlot (rotor::presets::Row row, int slot);
     bool isSlotFilled (rotor::presets::Row row, int slot) const { return bank.isFilled (row, slot); }
 
+    // ---- Dice ------------------------------------------------------------------------------
+    // Randomize one row, or all three rows (global options are never touched).
+    void randomizeRow (rotor::presets::Row row);
+    void randomizeAll();
+
+    // ---- Panel mode (like the hardware) -------------------------------------------------------
+    // While on, preset and row-slot recalls (and host program changes) are bypassed: what you
+    // hear is exactly the panel as it is. Storing, saving and randomizing still work.
+    // OPEN: whether the hardware's panel mode also restores the pre-preset panel when switched on.
+    void setPanelMode (bool on) { panelMode = on; }
+    bool isPanelMode() const { return panelMode; }
+
     // ---- State ---------------------------------------------------------------------------
     juce::ValueTree toValueTree() const;
     void fromValueTree (const juce::ValueTree& tree);
@@ -61,6 +73,7 @@ private:
     juce::AudioProcessorValueTreeState& state;
     rotor::presets::RowPresetBank bank;
     bool fullMode = true;
+    bool panelMode = false;
     int currentIndex = 0;
     juce::String currentName { "Init" };
 };

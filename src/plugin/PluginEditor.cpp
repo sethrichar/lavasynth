@@ -23,10 +23,13 @@ struct Section
 
 // ---------------------------------------------------------------------------------------------
 // The row-preset strip at the left of each row: 8 slots + STORE.
-class SlotStrip final : public juce::Component
+class SlotStrip final : public juce::Component, public juce::SettableTooltipClient
 {
 public:
-    SlotStrip (PresetManager& pm, Row r, juce::String number) : presets (pm), row (r), rowNumber (std::move (number)) {}
+    SlotStrip (PresetManager& pm, Row r, juce::String number) : presets (pm), row (r), rowNumber (std::move (number))
+    {
+        setTooltip ("Row " + rowNumber + ": click a slot to recall, STORE then a slot to save, dice to randomize this row");
+    }
 
     void paint (juce::Graphics& g) override
     {
@@ -40,11 +43,15 @@ public:
         g.setColour (colours::teal.withAlpha (0.8f));
         g.drawText (rowNumber, getLocalBounds().removeFromTop (40), juce::Justification::centred);
 
+        // In panel mode the slots can't recall, so they're dimmed (they still accept STORE).
+        const bool dimmed = presets.isPanelMode() && ! storeArmed;
+        if (dimmed)
+            g.beginTransparencyLayer (0.4f);
         for (int i = 0; i < rotor::presets::numSlots; ++i)
         {
             const auto cell = slotBounds (i).toFloat();
             const bool filled = presets.isSlotFilled (row, i);
-            const bool hot = hover == i;
+            const bool hot = hover == i && ! dimmed;
             g.setColour (hot ? colours::rose.withAlpha (0.25f) : colours::track);
             g.fillRoundedRectangle (cell, 3.0f);
             g.setColour ((storeArmed ? colours::rose : colours::teal).withAlpha (filled || hot ? 0.9f : 0.35f));
@@ -58,6 +65,10 @@ public:
                 g.fillEllipse (cell.getRight() - 7.0f, cell.getY() + 3.0f, 4.0f, 4.0f);
             }
         }
+        if (dimmed)
+            g.endTransparencyLayer();
+
+        drawDice (g, diceBounds().toFloat(), hover == diceIndex);
 
         const auto store = storeBounds().toFloat();
         g.setColour (storeArmed ? colours::rose : colours::track);
@@ -71,7 +82,7 @@ public:
 
     void mouseMove (const juce::MouseEvent& e) override
     {
-        const int h = slotAt (e.getPosition());
+        const int h = diceBounds().contains (e.getPosition()) ? diceIndex : slotAt (e.getPosition());
         if (h != hover) { hover = h; repaint(); }
     }
     void mouseExit (const juce::MouseEvent&) override { hover = -1; repaint(); }
@@ -82,6 +93,11 @@ public:
         {
             storeArmed = ! storeArmed;
             repaint();
+            return;
+        }
+        if (diceBounds().contains (e.getPosition()))
+        {
+            presets.randomizeRow (row); // roll the dice for this row
             return;
         }
         const int slot = slotAt (e.getPosition());
@@ -107,6 +123,13 @@ private:
         return { 6 + (i % 2) * (w + 6), 44 + (i / 2) * (h + 6), w, h };
     }
     juce::Rectangle<int> storeBounds() const { return { 6, getHeight() - 34, getWidth() - 12, 26 }; }
+    // Same size as a slot, centred under the eight slots, above STORE.
+    juce::Rectangle<int> diceBounds() const
+    {
+        const auto slot = slotBounds (0);
+        return slot.withPosition ((getWidth() - slot.getWidth()) / 2, slotBounds (7).getBottom() + 10);
+    }
+    static constexpr int diceIndex = 100;
     int slotAt (juce::Point<int> p) const
     {
         for (int i = 0; i < rotor::presets::numSlots; ++i)
@@ -120,6 +143,57 @@ private:
     juce::String rowNumber;
     bool storeArmed = false;
     int hover = -1;
+};
+
+// ---------------------------------------------------------------------------------------------
+// A toggle bound to plugin state that isn't a parameter (e.g. PANEL mode).
+class StateToggle final : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    StateToggle (juce::String text, std::function<bool()> get, std::function<void (bool)> set)
+        : label (std::move (text)), getter (std::move (get)), setter (std::move (set)) {}
+
+    void paint (juce::Graphics& g) override
+    {
+        const bool on = getter();
+        auto r = getLocalBounds().toFloat().reduced (1.0f);
+        if (on)
+            drawGlow (g, r, colours::rose, 3.0f, 0.25f);
+        g.setColour (on ? colours::rose : colours::track);
+        g.fillRoundedRectangle (r, 2.0f);
+        g.setColour (colours::rose.withAlpha (isMouseOver() ? 1.0f : 0.75f));
+        g.drawRoundedRectangle (r, 2.0f, 1.0f);
+        g.setColour (on ? colours::background : colours::rose);
+        g.setFont (Fonts::label (10.5f));
+        g.drawFittedText (label, getLocalBounds().reduced (2, 0), juce::Justification::centred, 1, 0.7f);
+    }
+    void mouseDown (const juce::MouseEvent&) override
+    {
+        setter (! getter());
+        if (auto* parent = getParentComponent())
+            parent->repaint();
+    }
+    void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+    void mouseExit (const juce::MouseEvent&) override { repaint(); }
+
+private:
+    juce::String label;
+    std::function<bool()> getter;
+    std::function<void (bool)> setter;
+};
+
+// The dice button (same look as the row dice).
+class DiceButton final : public juce::Component, public juce::SettableTooltipClient
+{
+public:
+    explicit DiceButton (std::function<void()> roll) : onRoll (std::move (roll)) {}
+    void paint (juce::Graphics& g) override { drawDice (g, getLocalBounds().toFloat().reduced (0.5f), isMouseOver()); }
+    void mouseDown (const juce::MouseEvent&) override { onRoll(); }
+    void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+    void mouseExit (const juce::MouseEvent&) override { repaint(); }
+
+private:
+    std::function<void()> onRoll;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -142,6 +216,10 @@ public:
         presetName.setButtonText (presets.getCurrentName());
         fullRow.setButtonText (presets.isFullMode() ? "FULL" : "ROW");
         fullRow.setToggleState (presets.isFullMode(), juce::dontSendNotification);
+        const bool bypassed = presets.isPanelMode();
+        for (auto* b : { &prev, &next, &presetName })
+            b->setAlpha (bypassed ? 0.4f : 1.0f);
+        presetName.setTooltip (bypassed ? "PANEL mode is on: presets are bypassed" : "Choose a preset");
         for (auto* s : slotStrips)
             s->repaint();
     }
@@ -189,6 +267,12 @@ public:
             g.setFont (Fonts::label (12.5f));
             g.drawText (s.title, b.reduced (12.0f, 0.0f).removeFromTop ((float) sectionTitle + 4.0f), juce::Justification::centredLeft);
         }
+
+        // Small captions over the section panels.
+        g.setColour (colours::text.withAlpha (0.55f));
+        g.setFont (Fonts::label (10.5f));
+        for (const auto& [text, area] : captions)
+            g.drawText (text, area, juce::Justification::centred);
     }
 
     void resized() override {} // fixed design layout (placed while building)
@@ -352,6 +436,22 @@ private:
         gx += faderWidth + 24;
         fader (gx, top, "glide", "GLIDE", Fader::Style::unipolar, false, shortFader); gx += faderWidth;
         fader (gx, top, "phaseDist", "PD", Fader::Style::bipolar, false, shortFader);
+
+        // Right-hand column: clock sync, panel mode, and the global dice.
+        const int colX = x + w - 214, colW = 196;
+        captions.push_back ({ "CLOCK SYNC", { colX, top - 2, colW, 14 } });
+        add<Toggle> ({ colX, top + 14, colW / 2 - 4, 26 }, param ("envSync"), "ENV SYNC").setTooltip ("Envelope times snap to note values at the host tempo");
+        add<Toggle> ({ colX + colW / 2 + 4, top + 14, colW / 2 - 4, 26 }, param ("lfoSync"), "LFO SYNC").setTooltip ("LFO rate snaps to note values at the host tempo");
+        captions.push_back ({ "PANEL MODE", { colX, top + 52, colW, 14 } });
+        add<StateToggle> ({ colX, top + 68, colW, 26 }, "PANEL",
+                          [this] { return presets.isPanelMode(); },
+                          [this] (bool on) { presets.setPanelMode (on); refresh(); })
+            .setTooltip ("Panel mode: presets and row slots are bypassed — the panel sounds exactly as it is");
+        captions.push_back ({ "RANDOM ALL", { colX, top + 106, colW, 14 } });
+        const auto slotSize = juce::Rectangle<int> (34, 30); // same size as a row preset slot
+        add<DiceButton> (slotSize.withPosition (colX + (colW - slotSize.getWidth()) / 2, top + 122),
+                         [this] { presets.randomizeAll(); })
+            .setTooltip ("Roll the dice: randomize all three rows (global options stay put)");
     }
 
     // ---- row 2: aftertouch, amp env, mod env, filter ------------------------------------------
@@ -422,7 +522,6 @@ private:
         add<Segmented> ({ cx, top, 92, 24 }, param ("lfoRange"), juce::StringArray { "SLOW", "FAST" }, false);
         add<Knob> ({ cx + 12, top + 32, 68, 72 }, param ("lfoKeyTrack"), "KEY TRK", true);
         add<Toggle> ({ cx, top + 112, 92, 24 }, param ("lfoRetrigger"), "RETRIG");
-        add<Toggle> ({ cx, top + 142, 92, 24 }, param ("lfoSync"), "SYNC");
         int lx = cx + 104;
         for (auto [id, label] : { std::pair { "lfoToPd", "PD" }, { "lfoToCutoff", "CUT" }, { "lfoToSpread", "SPRD" },
                                   { "lfoToFold", "FOLD" }, { "lfoToReverbMix", "RV MIX" }, { "lfoToDriveMix", "DR MIX" },
@@ -483,7 +582,7 @@ private:
     {
         options = std::make_unique<OptionsPanel>();
         addChildComponent (*options);
-        options->setBounds (designWidth - margin - 420, headerHeight - 12, 420, 370);
+        options->setBounds (designWidth - margin - 420, headerHeight - 12, 420, 338);
         auto place = [this] (std::unique_ptr<juce::Component> c, juce::Rectangle<int> b)
         {
             options->addAndMakeVisible (*c);
@@ -502,7 +601,6 @@ private:
         place (std::make_unique<Toggle> (param ("unisonGrace"), "ON"), { 180, row ("UNISON GRACE"), 70, 24 });
         place (std::make_unique<Segmented> (param ("monoPriority"), juce::StringArray { "LAST", "LOW", "HIGH" }, false),
                { 180, row ("MONO PRIORITY"), 220, 24 });
-        place (std::make_unique<Toggle> (param ("envSync"), "ON"), { 180, row ("ENVELOPE SYNC"), 70, 24 });
         place (std::make_unique<Toggle> (param ("mpe"), "ON"), { 180, row ("MPE"), 70, 24 });
         place (std::make_unique<Segmented> (param ("modWheelMode"), juce::StringArray { "WILDCARDS", "PITCH LFO" }, false),
                { 180, row ("MOD WHEEL"), 220, 24 });
@@ -516,6 +614,7 @@ private:
     RotorAudioProcessor& processor;
     PresetManager& presets;
     std::vector<Section> sections;
+    std::vector<std::pair<juce::String, juce::Rectangle<int>>> captions;
     std::vector<std::unique_ptr<juce::Component>> owned;
     juce::Array<SlotStrip*> slotStrips;
     juce::TextButton prev, next, presetName, save, fullRow, optionsButton;
