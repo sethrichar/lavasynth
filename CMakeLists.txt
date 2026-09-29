@@ -43,9 +43,19 @@ juce_add_plugin(Rotor
     FORMATS ${ROTOR_FORMATS}
     PRODUCT_NAME "Rotor")
 
-target_sources(Rotor PRIVATE
+juce_add_binary_data(RotorAssets SOURCES
+    resources/fonts/Orbitron.ttf
+    resources/fonts/ShareTechMono-Regular.ttf)
+
+set(ROTOR_PLUGIN_SOURCES
     src/plugin/PluginProcessor.cpp
-    src/plugin/Parameters.cpp)
+    src/plugin/PluginEditor.cpp
+    src/plugin/Parameters.cpp
+    src/plugin/PresetManager.cpp
+    src/plugin/ui/Theme.cpp
+    src/plugin/ui/Controls.cpp)
+
+target_sources(Rotor PRIVATE ${ROTOR_PLUGIN_SOURCES})
 
 target_compile_definitions(Rotor PUBLIC
     JUCE_WEB_BROWSER=0
@@ -56,6 +66,7 @@ target_compile_definitions(Rotor PUBLIC
 target_link_libraries(Rotor
     PRIVATE
         rotor_dsp
+        RotorAssets
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
@@ -65,10 +76,7 @@ target_link_libraries(Rotor
 
 if(ROTOR_BUILD_DEVTOOLS)
     juce_add_console_app(RotorRender PRODUCT_NAME "RotorRender")
-    target_sources(RotorRender PRIVATE
-        devtools/RenderCheck.cpp
-        src/plugin/PluginProcessor.cpp
-        src/plugin/Parameters.cpp)
+    target_sources(RotorRender PRIVATE devtools/RenderCheck.cpp ${ROTOR_PLUGIN_SOURCES})
     target_include_directories(RotorRender PRIVATE src)
     target_compile_definitions(RotorRender PRIVATE
         JUCE_WEB_BROWSER=0
@@ -76,6 +84,7 @@ if(ROTOR_BUILD_DEVTOOLS)
         JucePlugin_Name="Rotor")
     target_link_libraries(RotorRender PRIVATE
         rotor_dsp
+        RotorAssets
         juce::juce_audio_utils
         juce::juce_dsp
         juce::juce_recommended_config_flags)

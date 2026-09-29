@@ -83,7 +83,8 @@ All constants live in `src/dsp/WildcardTuning.h`; tune by ear.
 ## Wildcards / controls added from cheat sheet
 - [ ] Mod Wheel option: which wildcard params does the wildcard mode blend in, and how deep? Pitch LFO depth?
   (Assumed: the four pitch wildcards, fully at full wheel; vibrato ±1 st.)
-- [ ] Which Master-section toggles (EXT, ENV CLK, LFO CLK) are stored in presets.
+- [ ] Which Master-section toggles (EXT, ENV CLK, LFO CLK) are stored in presets. (Assumed: none — global options,
+  EXT, both syncs, LFO retrigger and master level stay put when presets or row slots load.)
 
 ## Resolved
 - 2026-09-29 — Voicing: keep all Envelope Curves and Filter Characters as permanent selectors, each a button in the final UI. Source: owner.

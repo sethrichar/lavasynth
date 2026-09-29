@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Parameters.h"
+#include "PresetManager.h"
 #include "dsp/Drive.h"
 #include "dsp/Expression.h"
 #include "dsp/HostSync.h"
@@ -35,16 +36,22 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
+    // Host programs = the factory presets.
+    int getNumPrograms() override { return presetManager.getNumFactoryPresets(); }
+    int getCurrentProgram() override { return juce::jmin (presetManager.getCurrentIndex(), getNumPrograms() - 1); }
+    void setCurrentProgram (int index) override { presetManager.loadPreset (index); }
+    const juce::String getProgramName (int index) override
+    {
+        const auto& f = PresetManager::factoryPresets();
+        return index >= 0 && index < (int) f.size() ? juce::String (f[(size_t) index].name) : juce::String();
+    }
     void changeProgramName (int, const juce::String&) override {}
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getState() { return state; }
+    PresetManager& getPresetManager() { return presetManager; }
 
 private:
     void handleMidi (const juce::MidiMessage& message);
@@ -53,6 +60,7 @@ private:
     void render (float* left, float* right, int numSamples, int offset);
 
     juce::AudioProcessorValueTreeState state;
+    PresetManager presetManager { state };
 
     struct VoiceParams
     {

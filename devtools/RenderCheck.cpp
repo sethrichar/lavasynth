@@ -2,6 +2,7 @@
 // Build: cmake -DROTOR_BUILD_DEVTOOLS=ON …
 // Run:   ./RotorRender [out.wav] [--plain] [paramId=value …]
 //        --plain skips the busy demo patch (defaults only); key=value sets any parameter (real units).
+#include "plugin/PluginEditor.h"
 #include "plugin/PluginProcessor.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -68,9 +69,173 @@ static double measureBentPitch (bool mpeOn, int bendValue = 8192 + 2048, int not
     return crossings * sr / counted;
 }
 
+// --check-presets: end-to-end checks of the preset system through the real processor.
+static int checkPresets()
+{
+    using rotor::presets::Row;
+    int failures = 0;
+    auto expect = [&failures] (bool ok, const char* what)
+    {
+        std::printf ("%s  %s\n", ok ? "ok  " : "FAIL", what);
+        failures += ok ? 0 : 1;
+    };
+
+    RotorAudioProcessor p;
+    p.setPlayConfigDetails (0, 2, 48000.0, 256);
+    p.prepareToPlay (48000.0, 256);
+    auto& pm = p.getPresetManager();
+
+    // 1. Every parameter belongs to a row or is a known global option.
+    int counts[5] {};
+    for (const auto& [id, v] : pm.snapshot())
+    {
+        const auto r = rotor::presets::rowOf (id);
+        ++counts[(int) r];
+        if (r == Row::unknown)
+            std::printf ("      unclassified parameter: %s\n", id.c_str());
+    }
+    std::printf ("      row 1: %d, row 2: %d, row 3: %d, global: %d\n", counts[0], counts[1], counts[2], counts[3]);
+    expect (counts[4] == 0, "every parameter is classified");
+
+    // 2. Every factory preset loads and renders finite audio at a sane level.
+    juce::AudioBuffer<float> buffer (2, 256);
+    for (int i = 0; i < pm.getNumFactoryPresets(); ++i)
+    {
+        pm.loadPreset (i);
+        double peak = 0.0;
+        bool finite = true;
+        for (int b = 0; b < 400; ++b)
+        {
+            juce::MidiBuffer midi;
+            if (b == 0)
+                for (int n : { 48, 55, 60, 64 })
+                    midi.addEvent (juce::MidiMessage::noteOn (1, n, 0.8f), 0);
+            if (b == 250)
+                for (int n : { 48, 55, 60, 64 })
+                    midi.addEvent (juce::MidiMessage::noteOff (1, n), 0);
+            p.processBlock (buffer, midi);
+            for (int ch = 0; ch < 2; ++ch)
+                for (int s = 0; s < 256; ++s)
+                {
+                    const float y = buffer.getSample (ch, s);
+                    finite = finite && std::isfinite (y);
+                    peak = std::max (peak, (double) std::abs (y));
+                }
+        }
+        const auto name = pm.getPresetNames()[i];
+        std::printf ("      %-16s peak %.2f\n", name.toRawUTF8(), peak);
+        expect (finite && peak > 0.01 && peak < 1.5, ("factory preset renders: " + name).toRawUTF8());
+    }
+
+    // 3. Row vs FULL recall.
+    auto value = [&p] (const char* id) { auto* x = p.getState().getParameter (id); return x->convertFrom0to1 (x->getValue()); };
+    auto setv = [&p] (const char* id, float v) { auto* x = p.getState().getParameter (id); x->setValueNotifyingHost (x->convertTo0to1 (v)); };
+    pm.loadPreset (0);
+    setv ("cutoff", 500.0f);
+    setv ("wow", 0.4f);
+    pm.setFullMode (true);
+    pm.storeSlot (Row::shaping, 3); // FULL: stores all rows in slot 3
+    setv ("cutoff", 3000.0f);
+    setv ("wow", 0.9f);
+    pm.setFullMode (false);
+    pm.recallSlot (Row::shaping, 3); // ROW: only row 2 comes back
+    expect (std::abs (value ("cutoff") - 500.0f) < 1.0f && std::abs (value ("wow") - 0.9f) < 1e-3f, "ROW recall restores only its row");
+    pm.setFullMode (true);
+    pm.recallSlot (Row::shaping, 3);
+    expect (std::abs (value ("wow") - 0.4f) < 1e-3f, "FULL recall restores every row");
+
+    // 4. The row memory and preset name survive a save/restore of the plugin state (a DAW session).
+    juce::MemoryBlock session;
+    p.getStateInformation (session);
+    RotorAudioProcessor q;
+    q.setStateInformation (session.getData(), (int) session.getSize());
+    expect (q.getPresetManager().isSlotFilled (Row::motion, 3), "row slots are saved with the session");
+    expect (std::abs (q.getState().getParameter ("cutoff")->convertFrom0to1 (q.getState().getParameter ("cutoff")->getValue()) - 500.0f) < 1.0f,
+            "parameters are saved with the session");
+
+    // 5. Old (v1.8) sessions — a bare parameter tree — still load.
+    {
+        juce::MemoryBlock old;
+        if (auto xml = p.getState().copyState().createXml())
+            juce::AudioProcessor::copyXmlToBinary (*xml, old);
+        RotorAudioProcessor r;
+        r.setStateInformation (old.getData(), (int) old.getSize());
+        expect (std::abs (r.getState().getParameter ("cutoff")->convertFrom0to1 (r.getState().getParameter ("cutoff")->getValue()) - 500.0f) < 1.0f,
+                "v1.8-format sessions still load");
+    }
+
+    // 6. User presets save to and load from files; global options stay put.
+    setv ("cutoff", 777.0f);
+    setv ("mpe", 1.0f);
+    expect (pm.saveUserPreset ("zz RenderCheck Test"), "user preset saves");
+    setv ("cutoff", 2000.0f);
+    setv ("mpe", 0.0f);
+    const int idx = pm.getPresetNames().indexOf ("zz RenderCheck Test");
+    pm.loadPreset (idx);
+    expect (std::abs (value ("cutoff") - 777.0f) < 1.0f, "user preset loads");
+    expect (value ("mpe") < 0.5f, "loading a preset leaves the global options alone");
+    PresetManager::getUserPresetFolder().getChildFile ("zz RenderCheck Test.rotorpreset").deleteFile();
+
+    std::printf ("%s\n", failures == 0 ? "ALL PRESET CHECKS PASSED" : "PRESET CHECKS FAILED");
+    return failures == 0 ? 0 : 1;
+}
+
+// --screenshot out.png [--preset=N] [--options] [param=value …]: renders the editor at full size.
+static int screenshot (int argc, char** argv)
+{
+    RotorAudioProcessor p;
+    p.setPlayConfigDetails (0, 2, 48000.0, 256);
+    p.prepareToPlay (48000.0, 256);
+    juce::String out = "screenshot.png";
+    bool showOptions = false;
+    for (int a = 1; a < argc; ++a)
+    {
+        const juce::String arg (argv[a]);
+        if (arg.endsWith (".png")) out = arg;
+        else if (arg.startsWith ("--preset=")) p.getPresetManager().loadPreset (arg.fromFirstOccurrenceOf ("=", false, false).getIntValue());
+        else if (arg == "--options") showOptions = true;
+        else if (arg.contains ("=") && ! arg.startsWith ("--"))
+            if (auto* param = p.getState().getParameter (arg.upToFirstOccurrenceOf ("=", false, false)))
+                param->setValueNotifyingHost (param->convertTo0to1 (arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue()));
+    }
+    // A couple of row slots filled so the strips show state.
+    p.getPresetManager().setFullMode (false);
+    p.getPresetManager().storeSlot (rotor::presets::Row::voices, 0);
+    p.getPresetManager().storeSlot (rotor::presets::Row::motion, 2);
+
+    std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
+    editor->setSize (RotorEditor::designWidth, RotorEditor::designHeight);
+    if (showOptions)
+    {
+        std::function<void (juce::Component&)> find = [&find] (juce::Component& c)
+        {
+            if (auto* b = dynamic_cast<juce::TextButton*> (&c); b != nullptr && b->getButtonText() == "OPTIONS")
+                b->onClick(); // run the click handler synchronously
+            for (auto* child : c.getChildren())
+                find (*child);
+        };
+        find (*editor);
+    }
+    // Snapshot paints synchronously; no event loop needed.
+    const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 1.0f);
+    juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile (out);
+    file.deleteFile();
+    juce::FileOutputStream stream (file);
+    juce::PNGImageFormat png;
+    const bool ok = stream.openedOk() && png.writeImageToStream (image, stream);
+    std::printf ("%s %s (%d x %d)\n", ok ? "wrote" : "FAILED", file.getFullPathName().toRawUTF8(), image.getWidth(), image.getHeight());
+    return ok ? 0 : 1;
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    for (int a = 1; a < argc; ++a)
+        if (juce::String (argv[a]) == "--screenshot")
+            return screenshot (argc, argv);
+    for (int a = 1; a < argc; ++a)
+        if (juce::String (argv[a]) == "--check-presets")
+            return checkPresets();
     for (int a = 1; a < argc; ++a)
         if (juce::String (argv[a]) == "--pitch-check")
         {

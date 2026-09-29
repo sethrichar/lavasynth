@@ -32,8 +32,17 @@ cmake -S . -B build -DROTOR_BUILD_DEVTOOLS=ON && cmake --build build --target Ro
 cd build && ./RotorRender_artefacts/Release/RotorRender render.wav   # prints CPU, peak, RMS; writes a 12 s demo
 ```
 
+## UI screenshots / preset checks
+
+```sh
+cd build && xvfb-run -a ./RotorRender_artefacts/Release/RotorRender --screenshot ui.png [--preset=N] [--options]
+./RotorRender_artefacts/Release/RotorRender --check-presets
+```
+
 ## Layout
 
 - `src/dsp/` — plain C++ DSP (no JUCE), unit-tested in `tests/`
 - `src/plugin/` — JUCE plugin glue (parameters, processor)
+- `src/plugin/ui/` — theme (colours, fonts, look-and-feel) and custom controls
+- `resources/fonts/` — Orbitron + Share Tech Mono (SIL OFL)
 - `devtools/` — offline render / CPU check tool (optional build)
