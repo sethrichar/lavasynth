@@ -2,6 +2,7 @@
 
 #include "Parameters.h"
 #include "dsp/Drive.h"
+#include "dsp/Expression.h"
 #include "dsp/HostSync.h"
 #include "dsp/LfoMinMax.h"
 #include "dsp/Reverb.h"
@@ -49,7 +50,7 @@ private:
     void handleMidi (const juce::MidiMessage& message);
     void apply (const rotor::VoiceAllocator::Result& result);
     void updateVoiceParameters();
-    void render (float* left, float* right, int numSamples);
+    void render (float* left, float* right, int numSamples, int offset);
 
     juce::AudioProcessorValueTreeState state;
 
@@ -124,6 +125,25 @@ private:
     std::atomic<float>* lfoToDriveMixParam = nullptr;
     std::atomic<float>* lfoToFxAmountParam = nullptr;
     std::atomic<float>* lfoToFxColorParam = nullptr;
+    std::atomic<float>* atWildcardParam = nullptr;
+    std::atomic<float>* atCutoffParam = nullptr;
+    std::atomic<float>* atLfoRateParam = nullptr;
+    std::atomic<float>* mpeParam = nullptr;
+    std::atomic<float>* modWheelModeParam = nullptr;
+    std::atomic<float>* tuneModeParam = nullptr;
+    std::atomic<float>* tuneParam = nullptr;
+    std::atomic<float>* extInputParam = nullptr;
+
+    // Performance expression: per-channel bend/pressure/timbre; which channel each voice's note came from.
+    rotor::MidiExpression expression;
+    std::array<int, 128> noteChannel {};
+    std::array<int, rotor::numVoices> voiceChannel {};
+
+    // External (sidechain) input, copied out before the output buffer is cleared.
+    juce::AudioBuffer<float> extBuffer;
+    int extChannels = 0;
+    rotor::TiltEq extTiltLeft, extTiltRight;
+    float previousExt[3] {}; // mono, left, right
     void updateEffects();
 
     rotor::PlateReverb reverb;
@@ -139,7 +159,6 @@ private:
     // Shared noise source (EXT input will replace it in v1.8) and its Color tilt EQ.
     rotor::PinkNoise noise;
     rotor::TiltEq noiseTilt;
-    float previousNoise = 0.0f;
 
     // Voices run 4× oversampled; each is panned, summed, then decimated back down per channel.
     rotor::Decimator4x decimatorLeft, decimatorRight;

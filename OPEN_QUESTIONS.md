@@ -69,10 +69,20 @@ All constants live in `src/dsp/WildcardTuning.h`; tune by ear.
 - [ ] Spreader: pan amounts per voice. (Assumed at full width: voice 2 −1, 3 +1, 4 −0.5, 5 +0.5, voice 1 centre.)
 - [ ] Spreader + mod env: how voice 1 moves. (Assumed: voice 1 pans by the mod env amount directly.)
 - [ ] Envelope scatter range. (Assumed: up to ×/÷ 4 per stage; a stage at its minimum only gets longer.)
-- [ ] Aftertouch "harmonic clusters": what intervals voices 1, 2, 4, 5 move to.
+- [ ] Aftertouch "harmonic clusters": what intervals voices 1, 2, 4, 5 move to. (Assumed: −12, −5, +7, +12 st at full
+  pressure, sliding continuously with pressure.)
+- [ ] Aftertouch ranges. (Assumed: cutoff ±3 oct, LFO rate ±3 oct; AT up blends the pitch wildcards additively.)
+
+## Performance (v1.8) — constants in `src/dsp/PerformanceTuning.h`
+- [ ] Pitch bend range in normal MIDI mode. (Assumed ±2 st; MPE per-note ±48 st.)
+- [ ] What MPE timbre (CC74) controls. (Assumed: cutoff ±2 octaves.) Does the hardware support MPE zones / MCM?
+- [ ] Pitch Drift: voice centre notes and drift depth. (Assumed centres C3, G3, C4, G4, C5; up to ±12 ct per octave away.)
+- [ ] Tune knob in Pitch Drift mode: is the negative side really a global detune? (Implemented literally from the manual.)
+- [ ] EXT stereo routing: "hard-panned, and also distributed to voices 3, 4, 5". (Assumed: voice 1 ← L, 2 ← R, 3–5 ← L+R.)
 
 ## Wildcards / controls added from cheat sheet
-- [ ] Mod Wheel option: which wildcard params does "Katla" mode blend in, and how deep? Pitch LFO depth?
+- [ ] Mod Wheel option: which wildcard params does the wildcard mode blend in, and how deep? Pitch LFO depth?
+  (Assumed: the four pitch wildcards, fully at full wheel; vibrato ±1 st.)
 - [ ] Which Master-section toggles (EXT, ENV CLK, LFO CLK) are stored in presets.
 
 ## Resolved

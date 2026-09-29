@@ -2,6 +2,8 @@
 
 #include "ControlFold.h"
 #include "Envelope.h"
+#include "Expression.h"
+#include "PerformanceTuning.h"
 #include "Glide.h"
 #include "LadderFilter.h"
 #include "Lfo.h"
@@ -101,7 +103,19 @@ public:
         // Wildcards (0..1 each). The wavefolder wildcard is `fold` above.
         Wildcards::Amounts wild;
         double spread = 0.0;         // stereo spreader width, 0..1
+
+        // Aftertouch sliders (bipolar), mod wheel and tuning.
+        double atWildcard = 0.0;     // up: pressure blends in the pitch wildcards; down: harmonic clusters
+        double atCutoff = 0.0;
+        double atLfoRate = 0.0;
+        double wheelWildcardBlend = 0.0; // mod wheel in "Wildcards" mode (0..1)
+        double wheelPitchLfo = 0.0;      // mod wheel in "Pitch LFO" mode (0..1)
+        double globalDetune = 0.0;       // -1..+1 → ± performance::globalDetuneMaxSemitones
+        double pitchDrift = 0.0;         // 0..1
     };
+
+    // Per-note expression (pitch bend, pressure, MPE timbre). Set before setParameters().
+    void setExpression (const Expression& e) { expression = e; }
 
     // Voice number (0-based, sets its spreader position) and its own random sequences.
     void setIdentity (int index, std::uint32_t seed)
@@ -110,6 +124,8 @@ public:
         lfo = Lfo (seed);
         lfo.setSampleRate (sampleRate);
         wildcards = Wildcards (seed ^ 0xA5A5A5A5u);
+        Random r (seed ^ 0x5EEDu);
+        driftError = r.bipolar(); // this voice's own tracking error (Pitch Drift)
     }
 
     static double midiNoteToHz (double note) { return 440.0 * std::pow (2.0, (note - 69.0) / 12.0); }
@@ -147,7 +163,14 @@ public:
         params = p;
         osc.setWaveform (p.waveform);
         sub.setWaveform (p.subWaveform == SubWaveform::square ? Waveform::square : Waveform::sine);
-        wildcards.setAmounts (p.wild);
+        // Aftertouch up (and the mod wheel in Wildcards mode) blend in the four pitch wildcards.
+        auto amounts = p.wild;
+        const double blend = std::max (0.0, p.atWildcard) * expression.pressure + p.wheelWildcardBlend;
+        amounts.noteDetune = std::min (1.0, amounts.noteDetune + blend);
+        amounts.wow = std::min (1.0, amounts.wow + blend);
+        amounts.flutter = std::min (1.0, amounts.flutter + blend);
+        amounts.reelDrag = std::min (1.0, amounts.reelDrag + blend);
+        wildcards.setAmounts (amounts);
         applyAmpEnvelope();
         modEnv.setParameters (p.mod);
         lfo.setShape (p.lfo.shape);
@@ -216,6 +239,8 @@ public:
     float getPanLeft() const { return panLeft; }
     float getPanRight() const { return panRight; }
     double getPitchOffsetCents() const { return wildcards.getPitchCents(); }
+    // Everything added to the played pitch (semitones): wildcards, bend, detune, drift, clusters, vibrato.
+    double getPitchOffsetSemitones() const { return pitchOffsetSemitones(); }
     Wildcards::Scatter getScatter() const { return scatter; }
     static constexpr double maxReleaseSeconds = 3600.0;
 
@@ -258,9 +283,29 @@ private:
     {
         if (currentNote < 0)
             return;
-        const double hz = midiNoteToHz (getCurrentPitch() + 0.01 * wildcards.getPitchCents());
+        const double hz = midiNoteToHz (getCurrentPitch() + pitchOffsetSemitones());
         osc.setFrequency (hz);
         sub.setFrequency (hz / (params.subOctave == 2 ? 4.0 : 2.0));
+    }
+
+    double pitchOffsetSemitones() const
+    {
+        namespace perf = performance;
+        const double pitch = getCurrentPitch();
+        double offset = 0.01 * wildcards.getPitchCents() + expression.bendSemitones
+                        + params.globalDetune * perf::globalDetuneMaxSemitones;
+
+        // Pitch Drift: the further from this voice's centre note, the further out of tune.
+        offset += params.pitchDrift * 0.01 * perf::driftMaxCentsPerOctave * driftError
+                  * (pitch - perf::driftCentreNotes[voiceIndex]) / 12.0;
+
+        // Wildcard AT down: harmonic clusters (voice 3 stays put).
+        if (params.atWildcard < 0.0)
+            offset += -params.atWildcard * expression.pressure * perf::clusterSemitones[voiceIndex];
+
+        // Mod wheel in Pitch LFO mode: vibrato from this voice's LFO.
+        offset += params.wheelPitchLfo * perf::pitchLfoMaxSemitones * lfo.getValue();
+        return offset;
     }
 
     double pitchForTracking() const { return currentNote >= 0 ? getCurrentPitch() : 60.0; }
@@ -289,11 +334,14 @@ private:
         const auto& lfoDepth = params.lfoDepth;
 
         lfo.setFrequency (params.lfo.rateHz * keyTrackedRate (pitch, params.lfo.keyTrack)
-                          * std::exp2 (envDepth.lfoRate * m * modEnvLfoRateOctaves));
+                          * std::exp2 (envDepth.lfoRate * m * modEnvLfoRateOctaves
+                                       + params.atLfoRate * expression.pressure * performance::atLfoRateOctaves));
 
         const double cutoff = keyTrackedCutoff (params.cutoffHz, pitch, params.keyTrack)
                               * std::exp2 (envDepth.cutoff * m * modEnvCutoffOctaves + lfoDepth.cutoff * l * lfoCutoffOctaves
-                                           + wildcards.getCutoffOctaves());
+                                           + wildcards.getCutoffOctaves()
+                                           + params.atCutoff * expression.pressure * performance::atCutoffOctaves
+                                           + (expression.timbre - 0.5) * 2.0 * performance::timbreCutoffOctaves);
         filter.setParameters (cutoff, params.resonance, params.filterMode, params.filterCharacter);
 
         // Control-signal wavefolding: past the ends of the range these reflect back.
@@ -331,6 +379,8 @@ private:
     Lfo lfo;
     Wildcards wildcards;
     Wildcards::Scatter scatter;
+    Expression expression;
+    double driftError = 0.0;
     int voiceIndex = 0;
     double wildcardGain = 1.0;
     double noiseBurstLevel = 0.0;
