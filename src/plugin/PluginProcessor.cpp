@@ -1,5 +1,7 @@
 #include "PluginProcessor.h"
 
+#include "PluginEditor.h"
+
 namespace
 {
     // Parameters that are expensive to apply (filter coefficients) are updated every this many samples.
@@ -508,8 +510,7 @@ void RotorAudioProcessor::apply (const rotor::VoiceAllocator::Result& result)
 
 juce::AudioProcessorEditor* RotorAudioProcessor::createEditor()
 {
-    // Generic editor until the UI pass in v1.9.
-    return new juce::GenericAudioProcessorEditor (*this);
+    return new RotorEditor (*this);
 }
 
 // State: the parameters plus the row preset memory and preset name, in one XML document.

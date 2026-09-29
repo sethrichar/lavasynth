@@ -14,6 +14,39 @@ Each entry: what changed, what's broken, how to roll back.
 
 ## Code
 
+### v1.9 — 2026-09-29 — Presets and the real UI
+**Changed**
+- **UI**: custom panel in the owner's "Synthwave, Toned Down" palette (mood board 03B): purple ground (#241C30 /
+  #2E2740), dusty rose #D98BC2 + muted teal #8FC9D9, soft glow, faint horizon grid; Orbitron title with a rose → teal
+  gradient, Share Tech Mono labels. Laid out in the hardware's three rows:
+  - Row 1: Voices (mode + five voice strips: on, level, octave, waveform) · Global (OSC, Sub ±oct/wave, Noise + Color +
+    EXT, Glide, PD)
+  - Row 2: Aftertouch · Amp Envelope (+ **Curve** button) · Mod Envelope (+ 5 depths) · Filter (+ **Character** button)
+  - Row 3: LFO (+ 8 depths incl. min-maxing) · Effects · Wildcards
+  - Header: preset browser (◀ name ▶, Save), FULL/ROW switch, Options panel (the DIP-switch settings), Master.
+  - Controls: vertical faders (stepped faders snap; waveform and LFO shape run top-to-bottom as on the hardware; bipolar
+    faders fill from the centre), teal-ringed knobs with rose pointers, outlined rose buttons. Value shows while touched;
+    double-click resets; shift = fine; mouse wheel works. Scalable window (50–200%, fixed aspect).
+- **Presets**:
+  - 8 factory presets (also the host's program list): Init, Glass Rotor, Tape Choir, Fold Bass, Looping Pluck,
+    Volcano Pad, Screaming Lead, Cluster Keys.
+  - User presets saved as `.rotorpreset` files in `~/Documents/Rotor/Presets` (browser: Save, ◀ ▶, menu, open folder).
+  - **Row presets**: each row has 8 slots; STORE then a slot saves; a slot recalls. FULL = all three rows at once,
+    ROW = just that row. The row memory is saved with the DAW session.
+  - Loading a preset leaves the global options (MPE, tune, sync, EXT, master…) alone.
+- State format v2 (parameters + row memory); v1.1–v1.8 sessions still load.
+- **Fixes**: a voice-mode change in the same audio block as a note-on released the new note (e.g. right after a preset
+  change); toggle/choice parameters left at an in-between value by a host didn't restore from a session (pluginval).
+- `RotorRender --check-presets` (end-to-end preset checks) and `--screenshot` (renders the UI to PNG).
+- 142 unit tests (4 new).
+
+**Validated**: unit tests pass, preset checks pass, Linux pluginval passes at strictness 10 (several seeds, incl. editor
+tests), macOS workflow green (pluginval + auval).
+
+**Broken / not yet done**: no undo history in the UI beyond the host's. Factory presets are first drafts.
+
+**Roll back**: `git checkout v1.8`.
+
 ### v1.8 — 2026-09-29 — Aftertouch, MPE, Global Detune / Pitch Drift, mod wheel, EXT input
 **Changed**
 - **Aftertouch** (channel pressure; per-note pressure in MPE; poly AT treated as pressure), three bipolar sliders:

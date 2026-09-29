@@ -2,6 +2,7 @@
 // Build: cmake -DROTOR_BUILD_DEVTOOLS=ON …
 // Run:   ./RotorRender [out.wav] [--plain] [paramId=value …]
 //        --plain skips the busy demo patch (defaults only); key=value sets any parameter (real units).
+#include "plugin/PluginEditor.h"
 #include "plugin/PluginProcessor.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -179,9 +180,59 @@ static int checkPresets()
     return failures == 0 ? 0 : 1;
 }
 
+// --screenshot out.png [--preset=N] [--options] [param=value …]: renders the editor at full size.
+static int screenshot (int argc, char** argv)
+{
+    RotorAudioProcessor p;
+    p.setPlayConfigDetails (0, 2, 48000.0, 256);
+    p.prepareToPlay (48000.0, 256);
+    juce::String out = "screenshot.png";
+    bool showOptions = false;
+    for (int a = 1; a < argc; ++a)
+    {
+        const juce::String arg (argv[a]);
+        if (arg.endsWith (".png")) out = arg;
+        else if (arg.startsWith ("--preset=")) p.getPresetManager().loadPreset (arg.fromFirstOccurrenceOf ("=", false, false).getIntValue());
+        else if (arg == "--options") showOptions = true;
+        else if (arg.contains ("=") && ! arg.startsWith ("--"))
+            if (auto* param = p.getState().getParameter (arg.upToFirstOccurrenceOf ("=", false, false)))
+                param->setValueNotifyingHost (param->convertTo0to1 (arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue()));
+    }
+    // A couple of row slots filled so the strips show state.
+    p.getPresetManager().setFullMode (false);
+    p.getPresetManager().storeSlot (rotor::presets::Row::voices, 0);
+    p.getPresetManager().storeSlot (rotor::presets::Row::motion, 2);
+
+    std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
+    editor->setSize (RotorEditor::designWidth, RotorEditor::designHeight);
+    if (showOptions)
+    {
+        std::function<void (juce::Component&)> find = [&find] (juce::Component& c)
+        {
+            if (auto* b = dynamic_cast<juce::TextButton*> (&c); b != nullptr && b->getButtonText() == "OPTIONS")
+                b->onClick(); // run the click handler synchronously
+            for (auto* child : c.getChildren())
+                find (*child);
+        };
+        find (*editor);
+    }
+    // Snapshot paints synchronously; no event loop needed.
+    const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 1.0f);
+    juce::File file = juce::File::getCurrentWorkingDirectory().getChildFile (out);
+    file.deleteFile();
+    juce::FileOutputStream stream (file);
+    juce::PNGImageFormat png;
+    const bool ok = stream.openedOk() && png.writeImageToStream (image, stream);
+    std::printf ("%s %s (%d x %d)\n", ok ? "wrote" : "FAILED", file.getFullPathName().toRawUTF8(), image.getWidth(), image.getHeight());
+    return ok ? 0 : 1;
+}
+
 int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
+    for (int a = 1; a < argc; ++a)
+        if (juce::String (argv[a]) == "--screenshot")
+            return screenshot (argc, argv);
     for (int a = 1; a < argc; ++a)
         if (juce::String (argv[a]) == "--check-presets")
             return checkPresets();
