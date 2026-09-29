@@ -3,6 +3,13 @@
 Things the manual doesn't answer. Resolve by ear, demo videos, hands-on time, or asking the manufacturer.
 When one is resolved: move it to "Resolved", note the source and the date, and update CLAUDE.md.
 
+## Effects (v1.7)
+- [ ] Reverb Amount macro ranges. (Assumed: decay 0.25–0.97 ≈ 0.5–10 s, tank modulation 1–12 samples, width 0–100%.)
+- [ ] LFO "effects amount" destination: both Reverb Amount and Drive Amount? (Assumed: both.)
+- [ ] Drive: gain range (assumed +36 dB), asymmetry, bias sag, and whether the Color scoop sits before or after the clipper
+  (assumed after).
+- [ ] Effects Color ranges. (Assumed: reverb tank damping + ±4.8 dB tilt; drive scoop 180 Hz–5.7 kHz, up to −15 dB.)
+
 ## Voice allocation (priority 1)
 - [ ] Round-Robin Random: can the same voice repeat back-to-back? (Assumed: no immediate repeat.)
 - [ ] Round-Robin steal: does the next voice take the note even while it's still sounding? (Assumed: yes.)

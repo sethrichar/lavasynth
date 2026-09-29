@@ -92,6 +92,18 @@ inline constexpr const char* spread = "spread";
 // Phase distortion offset (OPEN: may be modulation-only on the hardware)
 inline constexpr const char* phaseDist = "phaseDist";
 
+// Effects (reverb → drive)
+inline constexpr const char* reverbAmount = "reverbAmount";
+inline constexpr const char* reverbMix = "reverbMix";
+inline constexpr const char* driveAmount = "driveAmount";
+inline constexpr const char* driveMix = "driveMix";
+inline constexpr const char* fxColor = "fxColor";
+// LFO min-maxing to the global effect destinations (bipolar: up = max of the 5 LFOs, down = min)
+inline constexpr const char* lfoToReverbMix = "lfoToReverbMix";
+inline constexpr const char* lfoToDriveMix = "lfoToDriveMix";
+inline constexpr const char* lfoToFxAmount = "lfoToFxAmount";
+inline constexpr const char* lfoToFxColor = "lfoToFxColor";
+
 // Master
 inline constexpr const char* level = "level";
 

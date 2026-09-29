@@ -38,7 +38,7 @@ int main (int argc, char** argv)
     p.prepareToPlay (sr, block);
 
     bool plain = false;
-    for (int a = 2; a < argc; ++a)
+    for (int a = 1; a < argc; ++a)
         plain = plain || juce::String (argv[a]) == "--plain";
 
     // A busy patch: everything on.
@@ -70,8 +70,14 @@ int main (int argc, char** argv)
     set (p, "reelDrag", 0.4f);
     set (p, "chaos", 0.2f);
     set (p, "envScatter", 0.3f);
+    set (p, "reverbMix", 0.3f);
+    set (p, "reverbAmount", 0.6f);
+    set (p, "driveMix", 0.25f);
+    set (p, "driveAmount", 0.4f);
+    set (p, "lfoToReverbMix", 0.2f);
+    set (p, "lfoToFxColor", -0.4f);
     }
-    for (int a = 2; a < argc; ++a)
+    for (int a = 1; a < argc; ++a)
     {
         const juce::String arg (argv[a]);
         if (arg.contains ("=") && ! arg.startsWith ("--"))

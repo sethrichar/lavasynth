@@ -18,7 +18,8 @@ add_executable(rotor_tests
     ShaperTests.cpp
     OversamplingTests.cpp
     LfoTests.cpp
-    WildcardTests.cpp)
+    WildcardTests.cpp
+    EffectsTests.cpp)
 
 target_link_libraries(rotor_tests PRIVATE rotor_dsp Catch2::Catch2WithMain)
 

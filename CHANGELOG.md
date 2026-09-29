@@ -14,6 +14,29 @@ Each entry: what changed, what's broken, how to roll back.
 
 ## Code
 
+### v1.7 — 2026-09-29 — Effects: reverb → CMOS drive, Effects Color, LFO min-maxing
+**Changed**
+- **Reverb**: stereo plate after Dattorro's classic design (the 1980s digital-plate topology), modulated tank.
+  **Amount** is a macro — low = short, still, narrow; high = long (~10 s), modulated, wide. **Mix** = dry/wet.
+- **CMOS drive** (after the reverb, per the manual): asymmetric, sharp clipping with a level-dependent bias (the
+  "dynamic" part — the harmonic mix breathes), 4× oversampled; dry/wet mixed inside the oversampled domain so they stay
+  aligned. **Amount** = input gain (up to +36 dB) with loudness makeup (level stays within ~1 dB); **Mix** = dry/wet.
+- **Effects Color** (bipolar, centre = neutral): reverb → tank damping + tilt EQ on the tail; drive → a mid-scoop that
+  moves from ~180 Hz to ~5.7 kHz and deepens away from centre (sweeping it sounds phaser-like).
+- **LFO min-maxing** to Reverb Mix, Drive Mix, Effects Amount (moves both amounts), Effects Color: slider up = the
+  maximum of the five voice LFOs, down = the minimum.
+- Spec rev 1.7: Envelope Curve and Filter Character are permanent selectors (buttons in the final UI).
+- Fixed `RotorRender` ignoring `--plain` unless it came second.
+- 128 unit tests (9 new: reverb bypass/tail/width/colour/stability, drive latency/distortion/asymmetry/bounds/scoop, min-max).
+
+**Validated**: unit tests pass, Linux pluginval passes at strictness 5 and 10, macOS workflow green (pluginval + auval).
+Busy-patch render with both effects ≈ 19% of one 2.1 GHz cloud core, no NaNs.
+
+**Broken / not yet done**: the drive adds 0.8 ms of latency (not reported to the host; inaudible for a synth).
+Effect ranges are first guesses — see OPEN_QUESTIONS.
+
+**Roll back**: `git checkout v1.6`.
+
 ### v1.6 — 2026-09-29 — Wildcards, stereo spreader, voicing lab
 **Changed**
 - **The 8 wildcards** (unipolar, 0 = off, each voice independent, all constants in `src/dsp/WildcardTuning.h`):
