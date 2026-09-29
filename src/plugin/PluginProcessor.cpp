@@ -70,6 +70,15 @@ RotorAudioProcessor::RotorAudioProcessor()
     envScatterParam = state.getRawParameterValue (envScatter);
     spreadParam = state.getRawParameterValue (spread);
     envCurveParam = state.getRawParameterValue (envCurve);
+    reverbAmountParam = state.getRawParameterValue (reverbAmount);
+    reverbMixParam = state.getRawParameterValue (reverbMix);
+    driveAmountParam = state.getRawParameterValue (driveAmount);
+    driveMixParam = state.getRawParameterValue (driveMix);
+    fxColorParam = state.getRawParameterValue (fxColor);
+    lfoToReverbMixParam = state.getRawParameterValue (lfoToReverbMix);
+    lfoToDriveMixParam = state.getRawParameterValue (lfoToDriveMix);
+    lfoToFxAmountParam = state.getRawParameterValue (lfoToFxAmount);
+    lfoToFxColorParam = state.getRawParameterValue (lfoToFxColor);
     filterCharacterParam = state.getRawParameterValue (filterCharacter);
 
     // Each voice: its spreader position and its own random sequences (LFO, wildcards).
@@ -90,6 +99,9 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
         v.prepare (sampleRate * rotor::Decimator4x::factor);
     decimatorLeft.reset();
     decimatorRight.reset();
+    reverb.prepare (sampleRate);
+    driveLeft.prepare (sampleRate);
+    driveRight.prepare (sampleRate);
     noise.reset();
     noiseTilt.setSampleRate (sampleRate);
     noiseTilt.reset();
@@ -120,6 +132,11 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
     initControl (smoothedModEnvToPd, modEnvToPdParam);
     initControl (smoothedPhaseDist, phaseDistParam);
     initControl (smoothedSpread, spreadParam);
+    initControl (smoothedReverbAmount, reverbAmountParam);
+    initControl (smoothedReverbMix, reverbMixParam);
+    initControl (smoothedDriveAmount, driveAmountParam);
+    initControl (smoothedDriveMix, driveMixParam);
+    initControl (smoothedFxColor, fxColorParam);
     smoothedLevel.reset (sampleRate, smoothingSeconds);
     smoothedLevel.setCurrentAndTargetValue (levelParam->load());
 
@@ -195,6 +212,27 @@ void RotorAudioProcessor::updateVoiceParameters()
         apply (allocator.setVoiceEnabled (i, voiceParams[(size_t) i].on->load() >= 0.5f));
 }
 
+void RotorAudioProcessor::updateEffects()
+{
+    // LFO min-maxing: the five voice LFOs combined (up = maximum, down = minimum).
+    std::array<float, rotor::numVoices> lfos {};
+    for (int i = 0; i < rotor::numVoices; ++i)
+        lfos[(size_t) i] = voices[(size_t) i].getLfoValue();
+    const auto mod = [&lfos] (std::atomic<float>* depth) { return rotor::lfoMinMax (lfos, depth->load()); };
+
+    // OPEN: "effects amount" is assumed to move both Reverb Amount and Drive Amount.
+    const double amountMod = mod (lfoToFxAmountParam);
+    const double color = juce::jlimit (-1.0, 1.0, smoothedFxColor.getNextValue() + mod (lfoToFxColorParam));
+    auto unit = [] (double x) { return juce::jlimit (0.0, 1.0, x); };
+
+    reverb.setParameters (unit (smoothedReverbAmount.getNextValue() + amountMod), color,
+                          unit (smoothedReverbMix.getNextValue() + mod (lfoToReverbMixParam)));
+    const double driveAmt = unit (smoothedDriveAmount.getNextValue() + amountMod);
+    const double driveWet = unit (smoothedDriveMix.getNextValue() + mod (lfoToDriveMixParam));
+    driveLeft.setParameters (driveAmt, color, driveWet);
+    driveRight.setParameters (driveAmt, color, driveWet);
+}
+
 rotor::Envelope::Parameters RotorAudioProcessor::readEnvelope (const EnvelopeParams& e) const
 {
     rotor::Envelope::Parameters p;
@@ -241,6 +279,11 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     smoothedModEnvToPd.setTargetValue (modEnvToPdParam->load());
     smoothedPhaseDist.setTargetValue (phaseDistParam->load());
     smoothedSpread.setTargetValue (spreadParam->load());
+    smoothedReverbAmount.setTargetValue (reverbAmountParam->load());
+    smoothedReverbMix.setTargetValue (reverbMixParam->load());
+    smoothedDriveAmount.setTargetValue (driveAmountParam->load());
+    smoothedDriveMix.setTargetValue (driveMixParam->load());
+    smoothedFxColor.setTargetValue (fxColorParam->load());
     smoothedLevel.setTargetValue (levelParam->load());
 
     const int numSamples = buffer.getNumSamples();
@@ -262,6 +305,7 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             end = std::min (end, (*midiIt).samplePosition);
 
         updateVoiceParameters();
+        updateEffects();
         render (left + pos, right != nullptr ? right + pos : nullptr, end - pos);
         apply (allocator.advance (end - pos));
         pos = end;
@@ -295,9 +339,16 @@ void RotorAudioProcessor::render (float* left, float* right, int numSamples)
         }
         previousNoise = n;
 
-        const float gain = voiceSumGain * smoothedLevel.getNextValue();
-        const float l = decimatorLeft.process (blockLeft) * gain;
-        const float r = decimatorRight.process (blockRight) * gain;
+        float l = decimatorLeft.process (blockLeft) * voiceSumGain;
+        float r = decimatorRight.process (blockRight) * voiceSumGain;
+
+        // Effects: reverb, then CMOS drive (per the manual), then master level.
+        reverb.process (l, r);
+        l = driveLeft.process (l);
+        r = driveRight.process (r);
+        const float master = smoothedLevel.getNextValue();
+        l *= master;
+        r *= master;
         if (right != nullptr)
         {
             left[i] = l;

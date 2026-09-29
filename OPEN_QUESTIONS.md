@@ -3,6 +3,13 @@
 Things the manual doesn't answer. Resolve by ear, demo videos, hands-on time, or asking the manufacturer.
 When one is resolved: move it to "Resolved", note the source and the date, and update CLAUDE.md.
 
+## Effects (v1.7)
+- [ ] Reverb Amount macro ranges. (Assumed: decay 0.25–0.97 ≈ 0.5–10 s, tank modulation 1–12 samples, width 0–100%.)
+- [ ] LFO "effects amount" destination: both Reverb Amount and Drive Amount? (Assumed: both.)
+- [ ] Drive: gain range (assumed +36 dB), asymmetry, bias sag, and whether the Color scoop sits before or after the clipper
+  (assumed after).
+- [ ] Effects Color ranges. (Assumed: reverb tank damping + ±4.8 dB tilt; drive scoop 180 Hz–5.7 kHz, up to −15 dB.)
+
 ## Voice allocation (priority 1)
 - [ ] Round-Robin Random: can the same voice repeat back-to-back? (Assumed: no immediate repeat.)
 - [ ] Round-Robin steal: does the next voice take the note even while it's still sounding? (Assumed: yes.)
@@ -27,11 +34,6 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 - [ ] OSC Level overdrive: curve and maximum drive. (Assumed: clean below 50%; above, crossfade into tanh with up to +14 dB drive.)
 - [ ] Noise Color tilt range. (Assumed: ±6 dB per side at full Color, i.e. 12 dB end to end.)
 - [ ] Is the noise one shared source for all voices or independent per voice? (Assumed: one shared source, like EXT.)
-
-## Voicing (owner feedback 2026-09-29: envelope shape and filter voicing need work)
-- [ ] Which Envelope Curve to keep: Rotor / Punchy / Vintage Poly / Snappy Digital / Linear? (Listen: `voicing-envelopes.wav`.)
-- [ ] Which Filter Character to keep: Rotor / Transistor Ladder / OTA Cascade / State Variable / Screaming 12dB?
-  (Listen: `voicing-filters.wav`.) The spec says "between MS-20 and SEM"; a blend of two characters is possible.
 
 ## Filter / wavefolder
 - [ ] Bandpass slope: the manual's "36 dB/oct bandpass". (Assumed: ladder bandpass, 12 dB/oct each side, + 15% 12 dB lowpass.)
@@ -74,6 +76,7 @@ All constants live in `src/dsp/WildcardTuning.h`; tune by ear.
 - [ ] Which Master-section toggles (EXT, ENV CLK, LFO CLK) are stored in presets.
 
 ## Resolved
+- 2026-09-29 — Voicing: keep all Envelope Curves and Filter Characters as permanent selectors, each a button in the final UI. Source: owner.
 - 2026-09-28 — Glide source: each voice glides from its own previous note. Source: owner.
 - 2026-09-28 — Round-Robin rotation feel (v1.2) approved by ear. Source: owner.
 - 2026-09-28 — Voice octave range: −2 to +2, 5 steps. Source: cheat sheet.

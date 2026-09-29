@@ -55,6 +55,20 @@ public:
 
     static constexpr int latencyInputSamples() { return (NumTaps - 1) / 2; }
 
+    // Plain FIR step at the input rate (used by the interpolator).
+    float filter (float x)
+    {
+        push (x);
+        double y = 0.0;
+        std::size_t idx = pos;
+        for (int n = 0; n < NumTaps; ++n)
+        {
+            idx = idx == 0 ? (std::size_t) NumTaps - 1 : idx - 1;
+            y += taps[(std::size_t) n] * history[idx];
+        }
+        return static_cast<float> (y);
+    }
+
 private:
     static constexpr double pi = 3.141592653589793;
 
@@ -80,6 +94,47 @@ private:
     std::array<double, (std::size_t) NumTaps> taps {};
     std::array<double, (std::size_t) NumTaps> history {};
     std::size_t pos = 0;
+};
+
+// Doubles the sample rate: zero-stuffs and filters with the same halfband design.
+template <int NumTaps>
+class HalfbandInterpolator
+{
+public:
+    explicit HalfbandInterpolator (double kaiserBeta = 8.0) : filter (kaiserBeta) {}
+    void reset() { filter.reset(); }
+
+    // One input sample in, two output samples out.
+    void process (float x, float& a, float& b)
+    {
+        a = 2.0f * filter.filter (x);
+        b = 2.0f * filter.filter (0.0f);
+    }
+
+private:
+    HalfbandDecimator<NumTaps> filter;
+};
+
+// 1× → 4× upsampler: two halfband stages (the mirror of Decimator4x).
+class Upsampler4x
+{
+public:
+    void process (float x, float* out)
+    {
+        float a, b;
+        first.process (x, a, b);
+        second.process (a, out[0], out[1]);
+        second.process (b, out[2], out[3]);
+    }
+    void reset()
+    {
+        first.reset();
+        second.reset();
+    }
+
+private:
+    HalfbandInterpolator<63> first { 8.0 };  // 1× → 2×
+    HalfbandInterpolator<31> second { 7.0 }; // 2× → 4×
 };
 
 // 4× → 1× decimator: two halfband stages. The voices run at 4× so the nonlinear stages

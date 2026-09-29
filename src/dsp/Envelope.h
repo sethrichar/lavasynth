@@ -32,7 +32,7 @@ public:
     static constexpr double fastestLoopHz = 32.703195662574829;
     static constexpr double minTimeSeconds = 0.5 / fastestLoopHz; // ≈ 15.3 ms
 
-    // Curve shapes (voicing lab — pick by ear, then lock one in). Each stage is an RC curve
+    // Curve shapes (a permanent selector — owner decision; its own button in the final UI). Each stage is an RC curve
     // aimed past its end point: attack charges toward `attackTarget` (stopping at 1), decay and
     // release discharge toward `releaseTarget` (stopping at sustain / 0). A target just past the
     // end gives a strongly curved stage; a far target gives a nearly straight line.

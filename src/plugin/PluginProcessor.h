@@ -1,7 +1,10 @@
 #pragma once
 
 #include "Parameters.h"
+#include "dsp/Drive.h"
 #include "dsp/HostSync.h"
+#include "dsp/LfoMinMax.h"
+#include "dsp/Reverb.h"
 #include "dsp/Noise.h"
 #include "dsp/Oversampling.h"
 #include "dsp/Voice.h"
@@ -112,6 +115,19 @@ private:
     std::atomic<float>* envScatterParam = nullptr;
     std::atomic<float>* spreadParam = nullptr;
     std::atomic<float>* envCurveParam = nullptr;
+    std::atomic<float>* reverbAmountParam = nullptr;
+    std::atomic<float>* reverbMixParam = nullptr;
+    std::atomic<float>* driveAmountParam = nullptr;
+    std::atomic<float>* driveMixParam = nullptr;
+    std::atomic<float>* fxColorParam = nullptr;
+    std::atomic<float>* lfoToReverbMixParam = nullptr;
+    std::atomic<float>* lfoToDriveMixParam = nullptr;
+    std::atomic<float>* lfoToFxAmountParam = nullptr;
+    std::atomic<float>* lfoToFxColorParam = nullptr;
+    void updateEffects();
+
+    rotor::PlateReverb reverb;
+    rotor::CmosDrive driveLeft, driveRight;
     std::atomic<float>* filterCharacterParam = nullptr;
     double hostBpm = 120.0;
     std::atomic<float>* levelParam = nullptr;
@@ -144,6 +160,7 @@ private:
     juce::SmoothedValue<float> smoothedModEnvToPd;
     juce::SmoothedValue<float> smoothedPhaseDist;
     juce::SmoothedValue<float> smoothedSpread;
+    juce::SmoothedValue<float> smoothedReverbAmount, smoothedReverbMix, smoothedDriveAmount, smoothedDriveMix, smoothedFxColor;
     juce::SmoothedValue<float> smoothedLevel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RotorAudioProcessor)

@@ -172,7 +172,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     addDepth (lfoToSpread, "LFO > Spread");
     addDepth (lfoToFold, "LFO > Wavefolder");
 
-    // Voicing lab: compare classic-inspired characters by ear (see CHANGELOG v1.6).
+    // Voicing selectors (permanent, owner decision — see CLAUDE.md "Beyond the hardware").
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { envCurve, version }, "Envelope Curve",
         StringArray { "Rotor", "Punchy", "Vintage Poly", "Snappy Digital", "Linear" }, 0));
@@ -197,6 +197,22 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     // Phase distortion offset for the main oscillators; negative warps the other way.
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { phaseDist, version }, "Phase Distortion", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
+
+    // Effects: reverb → CMOS drive. Amounts and mixes unipolar; Color bipolar (centre = neutral).
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { reverbAmount, version }, "Reverb Amount", NormalisableRange<float> (0.0f, 1.0f), 0.5f, percent));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { reverbMix, version }, "Reverb Mix", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { driveAmount, version }, "Drive Amount", NormalisableRange<float> (0.0f, 1.0f), 0.5f, percent));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { driveMix, version }, "Drive Mix", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { fxColor, version }, "Effects Color", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
+    addDepth (lfoToReverbMix, "LFO > Reverb Mix");
+    addDepth (lfoToDriveMix, "LFO > Drive Mix");
+    addDepth (lfoToFxAmount, "LFO > Effects Amount");
+    addDepth (lfoToFxColor, "LFO > Effects Color");
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { level, version }, "Master Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f));
