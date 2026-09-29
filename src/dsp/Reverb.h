@@ -106,7 +106,11 @@ public:
         damping = 0.35 - 0.3 * c;                     // bright (+) = less high-frequency loss in the tank
         tilt.setColor (0.8 * c);
         tiltRight.setColor (0.8 * c);
-        mix = std::clamp (newMix, 0.0, 1.0);
+        // Equal-power crossfade: the wet tail is mostly uncorrelated with the dry signal, so a
+        // straight crossfade would dip in level around the middle.
+        const double m = std::clamp (newMix, 0.0, 1.0);
+        dryGain = std::cos (0.5 * 3.141592653589793 * m);
+        wetGain = std::sin (0.5 * 3.141592653589793 * m);
     }
 
     void process (float& left, float& right)
@@ -159,8 +163,8 @@ public:
         wetL = tilt.process ((float) (mid + side));
         wetR = tiltRight.process ((float) (mid - side));
 
-        left = (float) ((1.0 - mix) * dryL + mix * wetL);
-        right = (float) ((1.0 - mix) * dryR + mix * wetR);
+        left = (float) (dryGain * dryL + wetGain * wetL);
+        right = (float) (dryGain * dryR + wetGain * wetR);
     }
 
 private:
@@ -203,7 +207,7 @@ private:
     Tank tank[2];
     double bandwidthState = 0.0, lfoPhase = 0.0;
     double levelTrim = 1.0;
-    double decay = 0.5, excursion = 1.0, width = 0.5, damping = 0.35, mix = 0.0;
+    double decay = 0.5, excursion = 1.0, width = 0.5, damping = 0.35, dryGain = 1.0, wetGain = 0.0;
     TiltEq tilt, tiltRight;
 };
 

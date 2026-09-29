@@ -17,7 +17,8 @@ Each entry: what changed, what's broken, how to roll back.
 ### v1.7 — 2026-09-29 — Effects: reverb → CMOS drive, Effects Color, LFO min-maxing
 **Changed**
 - **Reverb**: stereo plate after Dattorro's classic design (the 1980s digital-plate topology), modulated tank.
-  **Amount** is a macro — low = short, still, narrow; high = long (~10 s), modulated, wide. **Mix** = dry/wet.
+  **Amount** is a macro — low = short, still, narrow; high = long (~10 s), modulated, wide. **Mix** = dry/wet
+  (equal-power, so the level holds through the middle).
 - **CMOS drive** (after the reverb, per the manual): asymmetric, sharp clipping with a level-dependent bias (the
   "dynamic" part — the harmonic mix breathes), 4× oversampled; dry/wet mixed inside the oversampled domain so they stay
   aligned. **Amount** = input gain (up to +36 dB) with loudness makeup (level stays within ~1 dB); **Mix** = dry/wet.
