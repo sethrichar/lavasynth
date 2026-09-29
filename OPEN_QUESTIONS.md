@@ -52,11 +52,16 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 - [ ] LFO starting phase per voice when free-running. (Assumed: all start at 0 when the plugin loads, then drift apart.)
 
 ## Wildcards (priority 3)
-- [ ] Depth ranges and rates for note detune, wow, flutter, reel drag.
+All constants live in `src/dsp/WildcardTuning.h`; tune by ear.
+- [ ] Depth ranges and rates for note detune, wow, flutter, reel drag. (Assumed: detune ±30 ct; wow ±35 ct at ~0.6 Hz;
+  flutter ±12 ct at ~9 Hz; reel drag dips up to −80 ct, ~0.8 bursts/s, 40 ms fall, 250 ms recovery.)
 - [ ] Reel drag: burst frequency, duration, direction (down only?).
-- [ ] Chaos: noise burst character and frequency; volume/cutoff mod rate.
+- [ ] Chaos: noise burst character and frequency; volume/cutoff mod rate. (Assumed: volume dips up to −9 dB and cutoff
+  ±1.5 oct at ~4 Hz; white-noise bursts 10–60 ms, ~3/s at full.)
 - [ ] Envelope scatter when attack AND decay are both > 0.
-- [ ] Spreader: pan amounts per voice.
+- [ ] Spreader: pan amounts per voice. (Assumed at full width: voice 2 −1, 3 +1, 4 −0.5, 5 +0.5, voice 1 centre.)
+- [ ] Spreader + mod env: how voice 1 moves. (Assumed: voice 1 pans by the mod env amount directly.)
+- [ ] Envelope scatter range. (Assumed: up to ×/÷ 4 per stage; a stage at its minimum only gets longer.)
 - [ ] Aftertouch "harmonic clusters": what intervals voices 1, 2, 4, 5 move to.
 
 ## Wildcards / controls added from cheat sheet

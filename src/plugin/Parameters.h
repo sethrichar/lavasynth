@@ -76,6 +76,15 @@ inline constexpr const char* lfoToCutoff = "lfoToCutoff";
 inline constexpr const char* lfoToSpread = "lfoToSpread";
 inline constexpr const char* lfoToFold = "lfoToFold";
 
+// Wildcards (unipolar, 0 = off). The wavefolder wildcard is `fold`.
+inline constexpr const char* noteDetune = "noteDetune";
+inline constexpr const char* wow = "wow";
+inline constexpr const char* flutter = "flutter";
+inline constexpr const char* reelDrag = "reelDrag";
+inline constexpr const char* chaos = "chaos";
+inline constexpr const char* envScatter = "envScatter";
+inline constexpr const char* spread = "spread";
+
 // Phase distortion offset (OPEN: may be modulation-only on the hardware)
 inline constexpr const char* phaseDist = "phaseDist";
 

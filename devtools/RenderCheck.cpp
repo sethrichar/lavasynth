@@ -46,13 +46,21 @@ int main (int argc, char** argv)
     set (p, "lfoKeyTrack", 0.5f);
     set (p, "lfoToCutoff", 0.2f);
     set (p, "lfoToPd", 0.4f);
+    set (p, "spread", 0.8f);
+    set (p, "lfoToSpread", 0.3f);
+    set (p, "wow", 0.3f);
+    set (p, "flutter", 0.2f);
+    set (p, "noteDetune", 0.3f);
+    set (p, "reelDrag", 0.4f);
+    set (p, "chaos", 0.2f);
+    set (p, "envScatter", 0.3f);
 
     const int totalBlocks = (int) (seconds * sr / block);
     juce::AudioBuffer<float> buffer (2, block);
     juce::AudioBuffer<float> recording (2, totalBlocks * block);
 
     const int chords[4][5] = { { 48, 55, 60, 64, 67 }, { 45, 52, 57, 60, 64 }, { 41, 48, 53, 57, 60 }, { 43, 50, 55, 59, 62 } };
-    double peak = 0.0, sumSq = 0.0;
+    double peak = 0.0, sumSq = 0.0, sideSq = 0.0;
     bool finite = true;
     auto start = std::chrono::steady_clock::now();
 
@@ -81,6 +89,11 @@ int main (int argc, char** argv)
         }
 
         p.processBlock (buffer, midi);
+        for (int i = 0; i < block; ++i)
+        {
+            const double side = 0.5 * (buffer.getSample (0, i) - buffer.getSample (1, i));
+            sideSq += side * side;
+        }
         for (int ch = 0; ch < 2; ++ch)
         {
             recording.copyFrom (ch, b * block, buffer, ch, 0, block);
@@ -97,6 +110,8 @@ int main (int argc, char** argv)
     const double elapsed = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
     const double rms = std::sqrt (sumSq / (2.0 * totalBlocks * block));
     std::printf ("rendered %.1f s in %.3f s  →  %.1f%% of one core (realtime = 100%%)\n", seconds, elapsed, 100.0 * elapsed / seconds);
+    const double sideRms = std::sqrt (sideSq / (totalBlocks * block));
+    std::printf ("stereo width: side %.1f dB below the total\n", 20.0 * std::log10 (rms / std::max (sideRms, 1e-12)));
     std::printf ("peak %.3f (%.1f dBFS), rms %.3f (%.1f dBFS), finite: %s\n",
                  peak, 20.0 * std::log10 (peak), rms, 20.0 * std::log10 (rms), finite ? "yes" : "NO");
 

@@ -172,6 +172,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     addDepth (lfoToSpread, "LFO > Spread");
     addDepth (lfoToFold, "LFO > Wavefolder");
 
+    // Wildcards: eight unipolar sliders, each acting on every voice independently.
+    auto addWildcard = [&] (const char* id, const String& name)
+    {
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { id, version }, name, NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+    };
+    addWildcard (noteDetune, "Note Detune");
+    addWildcard (wow, "Wow");
+    addWildcard (flutter, "Flutter");
+    addWildcard (reelDrag, "Reel Drag");
+    addWildcard (chaos, "Chaos");
+    addWildcard (envScatter, "Envelope Scatter");
+    addWildcard (spread, "Stereo Spread");
+
     // Phase distortion offset for the main oscillators; negative warps the other way.
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { phaseDist, version }, "Phase Distortion", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));

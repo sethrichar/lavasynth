@@ -7,7 +7,7 @@ namespace
     constexpr double smoothingSeconds = 0.02;
 
     // Headroom for five summed voices.
-    constexpr float voiceSumGain = 0.4f;
+    constexpr float voiceSumGain = 0.4f * 1.41421356f; // ×√2 offsets the centre pan's −3 dB
 } // namespace
 
 RotorAudioProcessor::RotorAudioProcessor()
@@ -62,10 +62,17 @@ RotorAudioProcessor::RotorAudioProcessor()
     lfoToSpreadParam = state.getRawParameterValue (lfoToSpread);
     lfoToFoldParam = state.getRawParameterValue (lfoToFold);
     phaseDistParam = state.getRawParameterValue (phaseDist);
+    noteDetuneParam = state.getRawParameterValue (noteDetune);
+    wowParam = state.getRawParameterValue (wow);
+    flutterParam = state.getRawParameterValue (flutter);
+    reelDragParam = state.getRawParameterValue (reelDrag);
+    chaosParam = state.getRawParameterValue (chaos);
+    envScatterParam = state.getRawParameterValue (envScatter);
+    spreadParam = state.getRawParameterValue (spread);
 
-    // Each voice's Volcano LFO gets its own random sequence.
+    // Each voice: its spreader position and its own random sequences (LFO, wildcards).
     for (int i = 0; i < rotor::numVoices; ++i)
-        voices[(size_t) i].setSeed (0x9E3779B9u * (std::uint32_t) (i + 1));
+        voices[(size_t) i].setIdentity (i, 0x9E3779B9u * (std::uint32_t) (i + 1));
     levelParam = state.getRawParameterValue (level);
 }
 
@@ -79,7 +86,8 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
 {
     for (auto& v : voices)
         v.prepare (sampleRate * rotor::Decimator4x::factor);
-    decimator.reset();
+    decimatorLeft.reset();
+    decimatorRight.reset();
     noise.reset();
     noiseTilt.setSampleRate (sampleRate);
     noiseTilt.reset();
@@ -109,6 +117,7 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
     initControl (smoothedLfoToFold, lfoToFoldParam);
     initControl (smoothedModEnvToPd, modEnvToPdParam);
     initControl (smoothedPhaseDist, phaseDistParam);
+    initControl (smoothedSpread, spreadParam);
     smoothedLevel.reset (sampleRate, smoothingSeconds);
     smoothedLevel.setCurrentAndTargetValue (levelParam->load());
 
@@ -160,6 +169,14 @@ void RotorAudioProcessor::updateVoiceParameters()
     p.lfoDepth.cutoff = smoothedLfoToCutoff.getNextValue();
     p.lfoDepth.spread = lfoToSpreadParam->load();
     p.lfoDepth.fold = smoothedLfoToFold.getNextValue();
+
+    p.wild.noteDetune = noteDetuneParam->load();
+    p.wild.wow = wowParam->load();
+    p.wild.flutter = flutterParam->load();
+    p.wild.reelDrag = reelDragParam->load();
+    p.wild.chaos = chaosParam->load();
+    p.wild.envScatter = envScatterParam->load();
+    p.spread = smoothedSpread.getNextValue();
 
     for (int i = 0; i < rotor::numVoices; ++i)
     {
@@ -219,6 +236,7 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     smoothedLfoToFold.setTargetValue (lfoToFoldParam->load());
     smoothedModEnvToPd.setTargetValue (modEnvToPdParam->load());
     smoothedPhaseDist.setTargetValue (phaseDistParam->load());
+    smoothedSpread.setTargetValue (spreadParam->load());
     smoothedLevel.setTargetValue (levelParam->load());
 
     const int numSamples = buffer.getNumSamples();
@@ -251,7 +269,7 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 void RotorAudioProcessor::render (float* left, float* right, int numSamples)
 {
     constexpr int os = rotor::Decimator4x::factor;
-    float block[os];
+    float blockLeft[os], blockRight[os];
 
     for (int i = 0; i < numSamples; ++i)
     {
@@ -261,18 +279,30 @@ void RotorAudioProcessor::render (float* left, float* right, int numSamples)
         for (int j = 0; j < os; ++j)
         {
             const float noiseSample = previousNoise + (n - previousNoise) * (float) (j + 1) / (float) os;
-            float sum = 0.0f;
+            float sumLeft = 0.0f, sumRight = 0.0f;
             for (auto& v : voices)
-                sum += v.process (noiseSample);
-            block[j] = sum;
+            {
+                const float s = v.process (noiseSample);
+                sumLeft += s * v.getPanLeft();
+                sumRight += s * v.getPanRight();
+            }
+            blockLeft[j] = sumLeft;
+            blockRight[j] = sumRight;
         }
         previousNoise = n;
 
-        // v1.6 adds the stereo spreader; until then voices are summed to the centre.
-        const float s = decimator.process (block) * voiceSumGain * smoothedLevel.getNextValue();
-        left[i] = s;
+        const float gain = voiceSumGain * smoothedLevel.getNextValue();
+        const float l = decimatorLeft.process (blockLeft) * gain;
+        const float r = decimatorRight.process (blockRight) * gain;
         if (right != nullptr)
-            right[i] = s;
+        {
+            left[i] = l;
+            right[i] = r;
+        }
+        else
+        {
+            left[i] = (l + r) * 0.70710678f; // mono bus: centred voices keep their level
+        }
     }
 }
 

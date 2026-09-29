@@ -104,6 +104,13 @@ private:
     std::atomic<float>* lfoToSpreadParam = nullptr;
     std::atomic<float>* lfoToFoldParam = nullptr;
     std::atomic<float>* phaseDistParam = nullptr;
+    std::atomic<float>* noteDetuneParam = nullptr;
+    std::atomic<float>* wowParam = nullptr;
+    std::atomic<float>* flutterParam = nullptr;
+    std::atomic<float>* reelDragParam = nullptr;
+    std::atomic<float>* chaosParam = nullptr;
+    std::atomic<float>* envScatterParam = nullptr;
+    std::atomic<float>* spreadParam = nullptr;
     double hostBpm = 120.0;
     std::atomic<float>* levelParam = nullptr;
 
@@ -116,8 +123,8 @@ private:
     rotor::TiltEq noiseTilt;
     float previousNoise = 0.0f;
 
-    // Voices run 4× oversampled and are summed before decimating back down.
-    rotor::Decimator4x decimator;
+    // Voices run 4× oversampled; each is panned, summed, then decimated back down per channel.
+    rotor::Decimator4x decimatorLeft, decimatorRight;
 
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Multiplicative> smoothedCutoff;
     juce::SmoothedValue<float> smoothedResonance;
@@ -134,6 +141,7 @@ private:
     juce::SmoothedValue<float> smoothedLfoToFold;
     juce::SmoothedValue<float> smoothedModEnvToPd;
     juce::SmoothedValue<float> smoothedPhaseDist;
+    juce::SmoothedValue<float> smoothedSpread;
     juce::SmoothedValue<float> smoothedLevel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RotorAudioProcessor)

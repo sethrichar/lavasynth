@@ -7,6 +7,7 @@
 #include "Lfo.h"
 #include "Oscillator.h"
 #include "Shapers.h"
+#include "Wildcards.h"
 
 #include <cmath>
 
@@ -95,10 +96,20 @@ public:
         ModEnvDepths modEnvDepth;
         LfoSettings lfo;
         LfoDepths lfoDepth;
+
+        // Wildcards (0..1 each). The wavefolder wildcard is `fold` above.
+        Wildcards::Amounts wild;
+        double spread = 0.0;         // stereo spreader width, 0..1
     };
 
-    // Gives each voice its own random sequence (Volcano LFO).
-    void setSeed (std::uint32_t seed) { lfo = Lfo (seed); lfo.setSampleRate (sampleRate); }
+    // Voice number (0-based, sets its spreader position) and its own random sequences.
+    void setIdentity (int index, std::uint32_t seed)
+    {
+        voiceIndex = index;
+        lfo = Lfo (seed);
+        lfo.setSampleRate (sampleRate);
+        wildcards = Wildcards (seed ^ 0xA5A5A5A5u);
+    }
 
     static double midiNoteToHz (double note) { return 440.0 * std::pow (2.0, (note - 69.0) / 12.0); }
 
@@ -135,7 +146,8 @@ public:
         params = p;
         osc.setWaveform (p.waveform);
         sub.setWaveform (p.subWaveform == SubWaveform::square ? Waveform::square : Waveform::sine);
-        env.setParameters (p.amp);
+        wildcards.setAmounts (p.wild);
+        applyAmpEnvelope();
         modEnv.setParameters (p.mod);
         lfo.setShape (p.lfo.shape);
         glide.setTimePerOctave (p.glideSecondsPerOctave);
@@ -156,6 +168,14 @@ public:
         velocity = newVelocity;
         // Each voice glides from its own previous note (confirmed by owner).
         glide.setTarget (midiNote);
+
+        // Wildcards drawn per trigger: note detune and envelope scatter.
+        wildcards.trigger();
+        scatter = wildcards.drawScatter (params.amp.attackSeconds <= Envelope::minTimeSeconds * 1.001,
+                                         params.amp.decaySeconds <= Envelope::minTimeSeconds * 1.001,
+                                         params.amp.releaseSeconds >= maxReleaseSeconds * 0.999);
+        applyAmpEnvelope();
+
         updateFrequency();
         updateEnvelopeRates();
         env.noteOn();
@@ -191,6 +211,12 @@ public:
     double getPhaseDistortion() const { return phaseDistortionAmount; }
     float getLfoValue() const { return lfo.getValue(); }
     double getLfoFrequency() const { return lfo.getFrequency(); }
+    double getPan() const { return pan; }
+    float getPanLeft() const { return panLeft; }
+    float getPanRight() const { return panRight; }
+    double getPitchOffsetCents() const { return wildcards.getPitchCents(); }
+    Wildcards::Scatter getScatter() const { return scatter; }
+    static constexpr double maxReleaseSeconds = 3600.0;
 
     // noise: this sample of the shared (tilt-EQ'd) noise source.
     float process (float noise = 0.0f)
@@ -212,16 +238,18 @@ public:
 
         // OPEN: how a voice's level couples into its sub/filter/LFO when the main osc is at 0.
         // Here the voice level scales the whole voice after the amp, so the sub and noise follow it.
-        const double mix = OscLevel::mainGain (params.oscLevel) * osc.process()
-                           + params.subLevel * sub.process()
-                           + params.noiseLevel * noise;
+        double mix = OscLevel::mainGain (params.oscLevel) * osc.process()
+                     + params.subLevel * sub.process()
+                     + params.noiseLevel * noise;
+        if (noiseBurstLevel > 0.0) // chaos wildcard
+            mix += noiseBurstLevel * wildcards.noiseSample();
 
         float s = oscOverdrive ((float) mix, OscLevel::drive (params.oscLevel));
         s = filter.process (s);
         s = wavefold (s, foldAmount);
 
         smoothedLevel += (params.level - smoothedLevel) * levelCoef;
-        return s * env.process() * velocity * (float) smoothedLevel;
+        return s * env.process() * velocity * (float) (smoothedLevel * wildcardGain);
     }
 
 private:
@@ -229,7 +257,7 @@ private:
     {
         if (currentNote < 0)
             return;
-        const double hz = midiNoteToHz (getCurrentPitch());
+        const double hz = midiNoteToHz (getCurrentPitch() + 0.01 * wildcards.getPitchCents());
         osc.setFrequency (hz);
         sub.setFrequency (hz / (params.subOctave == 2 ? 4.0 : 2.0));
     }
@@ -247,6 +275,12 @@ private:
     void updateModulation()
     {
         modulationCountdown = modulationInterval;
+
+        wildcards.tick (modulationInterval / sampleRate);
+        updateFrequency(); // pitch wildcards
+        wildcardGain = wildcards.getGain();
+        noiseBurstLevel = wildcards.getNoiseBurstLevel();
+
         const double m = modEnv.getLevel();
         const double l = lfo.getValue();
         const double pitch = pitchForTracking();
@@ -257,7 +291,8 @@ private:
                           * std::exp2 (envDepth.lfoRate * m * modEnvLfoRateOctaves));
 
         const double cutoff = keyTrackedCutoff (params.cutoffHz, pitch, params.keyTrack)
-                              * std::exp2 (envDepth.cutoff * m * modEnvCutoffOctaves + lfoDepth.cutoff * l * lfoCutoffOctaves);
+                              * std::exp2 (envDepth.cutoff * m * modEnvCutoffOctaves + lfoDepth.cutoff * l * lfoCutoffOctaves
+                                           + wildcards.getCutoffOctaves());
         filter.setParameters (cutoff, params.resonance, params.filterMode);
 
         // Control-signal wavefolding: past the ends of the range these reflect back.
@@ -265,6 +300,18 @@ private:
         phaseDistortionAmount = foldIntoRange (params.phaseDistortion + envDepth.phaseDistortion * m
                                                    + lfoDepth.phaseDistortion * l, -1.0, 1.0);
         osc.setPhaseDistortion (phaseDistortionAmount);
+
+        pan = spreadPan (voiceIndex, params.spread, envDepth.spread * m, lfoDepth.spread * l);
+        panGains (pan, panLeft, panRight);
+    }
+
+    void applyAmpEnvelope()
+    {
+        auto amp = params.amp;
+        amp.attackSeconds *= scatter.attack;
+        amp.decaySeconds *= scatter.decay;
+        amp.releaseSeconds = std::min (amp.releaseSeconds * scatter.release, maxReleaseSeconds);
+        env.setParameters (amp);
     }
 
     static constexpr double levelSmoothingSeconds = 0.01;
@@ -281,6 +328,13 @@ private:
     Envelope modEnv;
     Glide glide;
     Lfo lfo;
+    Wildcards wildcards;
+    Wildcards::Scatter scatter;
+    int voiceIndex = 0;
+    double wildcardGain = 1.0;
+    double noiseBurstLevel = 0.0;
+    double pan = 0.0;
+    float panLeft = 0.70710678f, panRight = 0.70710678f;
     double foldAmount = 0.0;
     double phaseDistortionAmount = 0.0;
     int modulationCountdown = 0;
