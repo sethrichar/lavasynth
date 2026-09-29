@@ -111,6 +111,8 @@ private:
     std::atomic<float>* chaosParam = nullptr;
     std::atomic<float>* envScatterParam = nullptr;
     std::atomic<float>* spreadParam = nullptr;
+    std::atomic<float>* envCurveParam = nullptr;
+    std::atomic<float>* filterCharacterParam = nullptr;
     double hostBpm = 120.0;
     std::atomic<float>* levelParam = nullptr;
 

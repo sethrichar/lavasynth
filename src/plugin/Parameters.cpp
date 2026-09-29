@@ -172,6 +172,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     addDepth (lfoToSpread, "LFO > Spread");
     addDepth (lfoToFold, "LFO > Wavefolder");
 
+    // Voicing lab: compare classic-inspired characters by ear (see CHANGELOG v1.6).
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { envCurve, version }, "Envelope Curve",
+        StringArray { "Rotor", "Punchy", "Vintage Poly", "Snappy Digital", "Linear" }, 0));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { filterCharacter, version }, "Filter Character",
+        StringArray { "Rotor", "Transistor Ladder", "OTA Cascade", "State Variable", "Screaming 12dB" }, 0));
+
     // Wildcards: eight unipolar sliders, each acting on every voice independently.
     auto addWildcard = [&] (const char* id, const String& name)
     {

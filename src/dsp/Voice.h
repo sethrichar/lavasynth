@@ -78,6 +78,7 @@ public:
 
         // Filter
         LadderFilter::Mode filterMode = LadderFilter::Mode::lowpass;
+        LadderFilter::Character filterCharacter = LadderFilter::Character::rotor; // voicing lab
         double cutoffHz = 8000.0;
         double resonance = 0.1;      // 0..1
         double keyTrack = 0.0;       // 0..1
@@ -293,7 +294,7 @@ private:
         const double cutoff = keyTrackedCutoff (params.cutoffHz, pitch, params.keyTrack)
                               * std::exp2 (envDepth.cutoff * m * modEnvCutoffOctaves + lfoDepth.cutoff * l * lfoCutoffOctaves
                                            + wildcards.getCutoffOctaves());
-        filter.setParameters (cutoff, params.resonance, params.filterMode);
+        filter.setParameters (cutoff, params.resonance, params.filterMode, params.filterCharacter);
 
         // Control-signal wavefolding: past the ends of the range these reflect back.
         foldAmount = foldIntoRange (params.fold + envDepth.fold * m + lfoDepth.fold * l, 0.0, 1.0);

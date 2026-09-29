@@ -69,6 +69,8 @@ RotorAudioProcessor::RotorAudioProcessor()
     chaosParam = state.getRawParameterValue (chaos);
     envScatterParam = state.getRawParameterValue (envScatter);
     spreadParam = state.getRawParameterValue (spread);
+    envCurveParam = state.getRawParameterValue (envCurve);
+    filterCharacterParam = state.getRawParameterValue (filterCharacter);
 
     // Each voice: its spreader position and its own random sequences (LFO, wildcards).
     for (int i = 0; i < rotor::numVoices; ++i)
@@ -142,6 +144,7 @@ void RotorAudioProcessor::updateVoiceParameters()
     p.noiseLevel = smoothedNoiseLevel.getNextValue();
     p.glideSecondsPerOctave = glideParam->load();
     p.filterMode = filterModeParam->load() >= 0.5f ? rotor::LadderFilter::Mode::bandpass : rotor::LadderFilter::Mode::lowpass;
+    p.filterCharacter = static_cast<rotor::LadderFilter::Character> (juce::jlimit (0, 4, (int) filterCharacterParam->load()));
     p.cutoffHz = smoothedCutoff.getNextValue();
     p.resonance = smoothedResonance.getNextValue();
     p.keyTrack = keyTrackParam->load();
@@ -200,6 +203,7 @@ rotor::Envelope::Parameters RotorAudioProcessor::readEnvelope (const EnvelopePar
     p.sustainLevel = e.sustain->load();
     p.releaseSeconds = e.release->load();
     p.loop = e.loop->load() >= 0.5f;
+    p.curve = static_cast<rotor::Envelope::Curve> (juce::jlimit (0, 4, (int) envCurveParam->load()));
 
     // ENV CLK: snap the stage times to note values at the host tempo.
     if (envSyncParam->load() >= 0.5f)

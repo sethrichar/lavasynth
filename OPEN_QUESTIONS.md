@@ -28,6 +28,11 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 - [ ] Noise Color tilt range. (Assumed: ±6 dB per side at full Color, i.e. 12 dB end to end.)
 - [ ] Is the noise one shared source for all voices or independent per voice? (Assumed: one shared source, like EXT.)
 
+## Voicing (owner feedback 2026-09-29: envelope shape and filter voicing need work)
+- [ ] Which Envelope Curve to keep: Rotor / Punchy / Vintage Poly / Snappy Digital / Linear? (Listen: `voicing-envelopes.wav`.)
+- [ ] Which Filter Character to keep: Rotor / Transistor Ladder / OTA Cascade / State Variable / Screaming 12dB?
+  (Listen: `voicing-filters.wav`.) The spec says "between MS-20 and SEM"; a blend of two characters is possible.
+
 ## Filter / wavefolder
 - [ ] Bandpass slope: the manual's "36 dB/oct bandpass". (Assumed: ladder bandpass, 12 dB/oct each side, + 15% 12 dB lowpass.)
 - [ ] Key-tracking range and reference note. (Assumed: 0–100%, 100% = 1:1 tracking, cutoff knob = cutoff at middle C.)

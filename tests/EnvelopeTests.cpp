@@ -247,3 +247,46 @@ TEST_CASE ("Host sync snaps times to note values", "[sync]")
     // Longer than the longest note value → the longest (16 bars at 120 = 48 s dotted).
     CHECK (NoteValues::snapSeconds (3600.0, 120.0) == Catch::Approx (48.0));
 }
+
+TEST_CASE ("Every envelope curve keeps its stage times and lands on its levels", "[envelope][voicing]")
+{
+    const auto curve = GENERATE (Envelope::Curve::rotor, Envelope::Curve::punchy, Envelope::Curve::vintagePoly,
+                                 Envelope::Curve::snappyDigital, Envelope::Curve::linear);
+    Envelope e;
+    e.setSampleRate (sr);
+    e.setParameters ({ 0.1, 0.2, 0.3, 0.3, false, curve });
+    e.noteOn();
+    CHECK (samplesIn (e, Envelope::Stage::attack) == Catch::Approx (0.1 * sr).margin (2));
+    samplesIn (e, Envelope::Stage::decay);
+    CHECK (e.getLevel() == Catch::Approx (0.3));
+    e.noteOff();
+    samplesIn (e, Envelope::Stage::release);
+    CHECK (e.getLevel() == 0.0);
+
+    // Loop tuning holds for every curve (full swing A + D at minimum = C1).
+    Envelope l;
+    l.setSampleRate (sr);
+    l.setParameters ({ 0.0, 0.0, 0.0, 0.1, true, curve });
+    l.noteOn();
+    CHECK (loopHz (l) == Catch::Approx (32.703).epsilon (0.005));
+}
+
+TEST_CASE ("Envelope curves differ in shape: linear is straight, snappy drops fastest", "[envelope][voicing]")
+{
+    auto levelAfterDecayFraction = [] (Envelope::Curve curve, double fraction)
+    {
+        Envelope e;
+        e.setSampleRate (sr);
+        e.setParameters ({ 0.0, 1.0, 0.0, 0.3, false, curve });
+        e.noteOn();
+        samplesIn (e, Envelope::Stage::attack);
+        run (e, (int) (fraction * sr));
+        return e.getLevel();
+    };
+    CHECK (levelAfterDecayFraction (Envelope::Curve::linear, 0.5) == Catch::Approx (0.5).margin (0.01));
+    const double snappy = levelAfterDecayFraction (Envelope::Curve::snappyDigital, 0.1);
+    const double rotor = levelAfterDecayFraction (Envelope::Curve::rotor, 0.1);
+    const double vintage = levelAfterDecayFraction (Envelope::Curve::vintagePoly, 0.1);
+    CHECK (snappy < rotor);
+    CHECK (rotor < vintage);
+}

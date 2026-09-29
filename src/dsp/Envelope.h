@@ -32,8 +32,39 @@ public:
     static constexpr double fastestLoopHz = 32.703195662574829;
     static constexpr double minTimeSeconds = 0.5 / fastestLoopHz; // ≈ 15.3 ms
 
-    // RC curve targets: attack charges toward 1.2 (stopping at 1), decay/release discharge
-    // toward just below 0 so they land exactly on 0.
+    // Curve shapes (voicing lab — pick by ear, then lock one in). Each stage is an RC curve
+    // aimed past its end point: attack charges toward `attackTarget` (stopping at 1), decay and
+    // release discharge toward `releaseTarget` (stopping at sustain / 0). A target just past the
+    // end gives a strongly curved stage; a far target gives a nearly straight line.
+    enum class Curve
+    {
+        rotor = 0,    // v1.5 default: gently curved attack, exponential decay
+        punchy,       // inspired by the Minimoog contour: near-linear attack, very exponential decay
+        vintagePoly,  // inspired by the Prophet-5 (CEM3310): softer, rounder decay tail
+        snappyDigital,// inspired by the Juno-106: linear attack, extremely snappy decay
+        linear        // straight lines
+    };
+
+    struct CurveShape
+    {
+        double attackTarget;
+        double releaseTarget;
+    };
+
+    static CurveShape shapeOf (Curve c)
+    {
+        switch (c)
+        {
+            case Curve::punchy: return { 1.5, -0.001 };
+            case Curve::vintagePoly: return { 1.3, -0.05 };
+            case Curve::snappyDigital: return { 1000.0, -0.0003 };
+            case Curve::linear: return { 1000.0, -1000.0 };
+            case Curve::rotor: break;
+        }
+        return { 1.2, -0.01 };
+    }
+
+    // The default (rotor) curve's targets.
     static constexpr double attackTarget = 1.2;
     static constexpr double releaseTarget = -0.01;
 
@@ -44,6 +75,7 @@ public:
         double sustainLevel = 0.7; // 0..1
         double releaseSeconds = 0.3;
         bool loop = false;
+        Curve curve = Curve::rotor;
     };
 
     void setSampleRate (double newSampleRate)
@@ -96,7 +128,7 @@ public:
                 break;
 
             case Stage::attack:
-                level = attackTarget + (level - attackTarget) * attackCoef;
+                level = shape.attackTarget + (level - shape.attackTarget) * attackCoef;
                 if (level >= 1.0)
                 {
                     level = 1.0;
@@ -105,7 +137,7 @@ public:
                 break;
 
             case Stage::decay:
-                level = releaseTarget + (level - releaseTarget) * decayCoef;
+                level = shape.releaseTarget + (level - shape.releaseTarget) * decayCoef;
                 if (level <= params.sustainLevel)
                 {
                     level = params.sustainLevel;
@@ -121,7 +153,7 @@ public:
                 break;
 
             case Stage::release:
-                level = releaseTarget + (level - releaseTarget) * releaseCoef;
+                level = shape.releaseTarget + (level - shape.releaseTarget) * releaseCoef;
                 if (level <= 0.0)
                 {
                     level = 0.0;
@@ -144,14 +176,16 @@ private:
     void updateRates()
     {
         auto stageTime = [this] (double seconds) { return std::max (seconds, minTimeSeconds) / rateScale; };
-        attackCoef = coefficient (stageTime (params.attackSeconds), sampleRate, 0.0, 1.0, attackTarget);
-        decayCoef = coefficient (stageTime (params.decaySeconds), sampleRate, 1.0, 0.0, releaseTarget);
-        releaseCoef = coefficient (stageTime (params.releaseSeconds), sampleRate, 1.0, 0.0, releaseTarget);
+        shape = shapeOf (params.curve);
+        attackCoef = coefficient (stageTime (params.attackSeconds), sampleRate, 0.0, 1.0, shape.attackTarget);
+        decayCoef = coefficient (stageTime (params.decaySeconds), sampleRate, 1.0, 0.0, shape.releaseTarget);
+        releaseCoef = coefficient (stageTime (params.releaseSeconds), sampleRate, 1.0, 0.0, shape.releaseTarget);
     }
 
     double sampleRate = 44100.0;
     Parameters params;
     double rateScale = 1.0;
+    CurveShape shape = shapeOf (Curve::rotor);
     Stage stage = Stage::idle;
     double level = 0.0;
     double attackCoef = 0.0;

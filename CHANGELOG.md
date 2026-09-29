@@ -13,6 +13,33 @@ Each entry: what changed, what's broken, how to roll back.
 
 ## Code
 
+### v1.6 — 2026-09-29 — Wildcards, stereo spreader, voicing lab
+**Changed**
+- **The 8 wildcards** (unipolar, 0 = off, each voice independent, all constants in `src/dsp/WildcardTuning.h`):
+  Note Detune (new random offset per key press), Wow (slow drift), Flutter (fast wobble), Reel Drag (random downward
+  pitch dips that recover), Chaos (volume dips, cutoff wander, short noise bursts), Envelope Scatter (random amp A/D/R per
+  trigger, following the manual's rules), Stereo Spread, and Wavefolder (the existing `fold`).
+- **Stereo**: voices are panned (voice 1 centre, 2 & 4 left, 3 & 5 right) and the plugin now outputs true stereo.
+  Mod env → Spread widens/narrows and reverses the order past zero (and moves voice 1); LFO → Spread moves each voice on
+  its own; everything folds at the edges. Constant-power panning, level-matched to v1.5 for centred voices.
+- **Voicing lab** (owner feedback: envelope shape and filter voicing need work). Two temporary selectors to compare by ear:
+  - **Envelope Curve**: Rotor (v1.5), Punchy (Minimoog-inspired), Vintage Poly (Prophet-5/CEM3310-inspired),
+    Snappy Digital (Juno-106-inspired), Linear. All keep exact stage times and the 32.7 Hz fastest loop.
+  - **Filter Character**: Rotor (v1.4 ladder), Transistor Ladder (Moog-inspired, per-stage saturation, bass thins),
+    OTA Cascade (CEM3320/Prophet-5-inspired, cleaner), State Variable (Oberheim SEM-inspired, 12 dB, round),
+    Screaming 12dB (MS-20-inspired, hard asymmetric resonance). All self-oscillate in tune; level-matched within ~3.5 dB.
+  Once a curve and a character are chosen, they become the fixed voicing and these selectors are retired.
+- Bandpass at high resonance now sits ~6 dB above the lowpass (was ~16 dB) — fixes the v1.4 known issue.
+- `RotorRender` gains `--plain`, `--seconds=N` and `paramId=value` overrides for A/B renders.
+- 119 unit tests (19 new).
+
+**Validated**: unit tests pass, Linux pluginval passes at strictness 5 and 10, macOS workflow green (pluginval + auval).
+Busy-patch render ≈ 15% of one 2.1 GHz cloud core, true stereo, no NaNs.
+
+**Broken / not yet done**: aftertouch blending of the pitch wildcards is v1.8. Wildcard depths/rates are first guesses.
+
+**Roll back**: `git checkout v1.5`.
+
 ### v1.5 — 2026-09-29 — Modulation: looping envelopes, mod envelope, LFOs, phase distortion, host sync
 **Changed**
 - **Envelopes** (amp + mod, one each per voice, shared controls): analog-style RC curves; stage times are full-swing times,

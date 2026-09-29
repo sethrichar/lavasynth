@@ -76,6 +76,10 @@ inline constexpr const char* lfoToCutoff = "lfoToCutoff";
 inline constexpr const char* lfoToSpread = "lfoToSpread";
 inline constexpr const char* lfoToFold = "lfoToFold";
 
+// Voicing lab (temporary A/B selectors — one choice will be locked in, then these are retired)
+inline constexpr const char* envCurve = "envCurve";
+inline constexpr const char* filterCharacter = "filterCharacter";
+
 // Wildcards (unipolar, 0 = off). The wavefolder wildcard is `fold`.
 inline constexpr const char* noteDetune = "noteDetune";
 inline constexpr const char* wow = "wow";
