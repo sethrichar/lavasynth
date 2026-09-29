@@ -23,7 +23,8 @@ public:
         bandpass
     };
 
-    // Voicing lab — pick by ear, then lock one in. Names are descriptive; the inspirations are noted.
+    // Filter character: a permanent selector (owner decision; its own button in the final UI).
+    // UI names are descriptive; the inspirations are noted here only.
     enum class Character
     {
         rotor = 0,        // v1.4 default: 4-pole ladder, saturation at the input, partial bass compensation

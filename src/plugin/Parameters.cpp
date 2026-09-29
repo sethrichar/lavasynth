@@ -172,7 +172,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     addDepth (lfoToSpread, "LFO > Spread");
     addDepth (lfoToFold, "LFO > Wavefolder");
 
-    // Voicing lab: compare classic-inspired characters by ear (see CHANGELOG v1.6).
+    // Voicing selectors (permanent, owner decision — see CLAUDE.md "Beyond the hardware").
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { envCurve, version }, "Envelope Curve",
         StringArray { "Rotor", "Punchy", "Vintage Poly", "Snappy Digital", "Linear" }, 0));

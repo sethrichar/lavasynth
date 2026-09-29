@@ -76,7 +76,7 @@ inline constexpr const char* lfoToCutoff = "lfoToCutoff";
 inline constexpr const char* lfoToSpread = "lfoToSpread";
 inline constexpr const char* lfoToFold = "lfoToFold";
 
-// Voicing lab (temporary A/B selectors — one choice will be locked in, then these are retired)
+// Voicing selectors (permanent; each gets its own button in the final UI)
 inline constexpr const char* envCurve = "envCurve";
 inline constexpr const char* filterCharacter = "filterCharacter";
 

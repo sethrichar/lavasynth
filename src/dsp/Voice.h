@@ -78,7 +78,7 @@ public:
 
         // Filter
         LadderFilter::Mode filterMode = LadderFilter::Mode::lowpass;
-        LadderFilter::Character filterCharacter = LadderFilter::Character::rotor; // voicing lab
+        LadderFilter::Character filterCharacter = LadderFilter::Character::rotor;
         double cutoffHz = 8000.0;
         double resonance = 0.1;      // 0..1
         double keyTrack = 0.0;       // 0..1

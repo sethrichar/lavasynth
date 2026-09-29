@@ -2,7 +2,7 @@
 
 > Working title only. Do NOT use "Katla", "Genki", or the Icelandic parameter names in code identifiers,
 > UI, bundle IDs, presets, or marketing. The Icelandic names appear below ONLY as a reference key to the manual.
-> Spec revision: 1.7 (working). Sources: the Katla User Manual and controls cheat sheet (kept on the owner's Mac only —
+> Spec revision: 1.6 (working). Sources: the Katla User Manual and controls cheat sheet (kept on the owner's Mac only —
 > NOT in this public repo). This spec is the complete reference; everything needed from those documents is summarized here.
 > Previous specs: `archive/`. Items the manual does not answer are marked **[OPEN]** and tracked in `OPEN_QUESTIONS.md`.
 
@@ -194,13 +194,6 @@ Plugin sidechain input replaces the five hardware inputs. Routing rules to emula
   - Row 3: LFO, Effects, Wildcards
   In the plugin: a preset menu per row plus full presets. Master-section toggles (EXT, sync) are probably not stored per row **[OPEN]**.
 
-## Beyond the hardware — voicing selectors (in the plugin since v1.6, owner decision 2026-09-29)
-- **Envelope Curve** (applies to amp + mod envelopes): Rotor, Punchy (Minimoog-inspired), Vintage Poly (Prophet-5/CEM3310-
-  inspired), Snappy Digital (Juno-106-inspired), Linear. Default Rotor.
-- **Filter Character**: Rotor (ladder), Transistor Ladder (Moog-inspired), OTA Cascade (CEM3320-inspired), State Variable
-  (SEM-inspired), Screaming 12dB (MS-20-inspired). Default Rotor.
-- Both stay as permanent controls, each with its own button in the final UI (v1.9). UI names stay generic (no brand names).
-
 ## Beyond the hardware (optional, post-v2 — not in the original)
 - "Re-roll voices" button that randomizes per-voice level/octave/waveform within limits.
 - Seeded randomness so a bounce can be reproduced exactly.
@@ -214,7 +207,7 @@ Plugin sidechain input replaces the five hardware inputs. Routing rules to emula
 - **v1.6** — The 8 wildcard parameters + stereo voice panning. `WildcardTuning.h`.
 - **v1.7** — Reverb → CMOS drive, Effects Color, LFO min-maxing to the 4 global FX destinations.
 - **v1.8** — Aftertouch (3 modes), MPE, Global Detune / Pitch Drift, sidechain external inputs.
-- **v1.9** — Full + row presets, UI pass (including buttons for Envelope Curve and Filter Character). Layout can follow the hardware's 3-row functional grouping, but the visual design,
+- **v1.9** — Full + row presets, UI pass. Layout can follow the hardware's 3-row functional grouping, but the visual design,
   colors, and names must be our own.
 - **v2** — First exported build for testing by others.
 

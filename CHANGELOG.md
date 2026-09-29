@@ -9,7 +9,8 @@ Each entry: what changed, what's broken, how to roll back.
 - 2026-09-28 — Spec rev 1.3: control details from the cheat sheet. (`archive/CLAUDE_spec-v1.3.md`)
 - 2026-09-28 — Spec rev 1.4: cloud (Linux) + GitHub Actions (macOS) build workflow. (`archive/CLAUDE_spec-v1.4.md`)
 - 2026-09-28 — Spec rev 1.5: repo is public; spec made self-contained, manufacturer docs kept off-repo. (`archive/CLAUDE_spec-v1.5.md`)
-- 2026-09-28 — Spec rev 1.6: glide source confirmed (each voice glides from its own previous note).
+- 2026-09-28 — Spec rev 1.6: glide source confirmed (each voice glides from its own previous note). (`archive/CLAUDE_spec-v1.6.md`)
+- 2026-09-29 — Spec rev 1.7: Envelope Curve and Filter Character become permanent selectors (buttons in the final UI).
 
 ## Code
 
