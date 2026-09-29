@@ -539,7 +539,23 @@ void RotorAudioProcessor::setStateInformation (const void* data, int sizeInBytes
             presetManager.fromValueTree (juce::ValueTree::fromXml (*rows));
     }
     if (params != nullptr && params->hasTagName (state.state.getType()))
+    {
         state.replaceState (juce::ValueTree::fromXml (*params));
+
+        // replaceState skips parameters whose stored value "looks unchanged" — but a host can leave a
+        // toggle or choice at an in-between raw value (e.g. 0.72 for "on"). Push every stored value
+        // explicitly so the parameters match the saved state exactly.
+        for (const auto& child : state.state)
+        {
+            const auto id = child.getProperty ("id").toString();
+            if (auto* param = state.getParameter (id); param != nullptr && child.hasProperty ("value"))
+            {
+                const float normalised = param->convertTo0to1 ((float) (double) child.getProperty ("value"));
+                if (std::abs (param->getValue() - normalised) > 1e-6f)
+                    param->setValueNotifyingHost (normalised);
+            }
+        }
+    }
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
