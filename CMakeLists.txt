@@ -45,7 +45,8 @@ juce_add_plugin(Rotor
 
 target_sources(Rotor PRIVATE
     src/plugin/PluginProcessor.cpp
-    src/plugin/Parameters.cpp)
+    src/plugin/Parameters.cpp
+    src/plugin/PresetManager.cpp)
 
 target_compile_definitions(Rotor PUBLIC
     JUCE_WEB_BROWSER=0
@@ -68,7 +69,8 @@ if(ROTOR_BUILD_DEVTOOLS)
     target_sources(RotorRender PRIVATE
         devtools/RenderCheck.cpp
         src/plugin/PluginProcessor.cpp
-        src/plugin/Parameters.cpp)
+        src/plugin/Parameters.cpp
+        src/plugin/PresetManager.cpp)
     target_include_directories(RotorRender PRIVATE src)
     target_compile_definitions(RotorRender PRIVATE
         JUCE_WEB_BROWSER=0

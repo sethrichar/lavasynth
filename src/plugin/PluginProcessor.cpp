@@ -350,6 +350,9 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     int pos = 0;
     while (pos < numSamples)
     {
+        // Settings first (a voice-mode change releases voices, so it must not come after new notes).
+        updateVoiceParameters();
+
         // Split at control-block boundaries and at MIDI events for sample-accurate notes.
         int end = std::min (numSamples, pos + controlBlockSize);
         while (midiIt != midi.cend() && (*midiIt).samplePosition <= pos)
@@ -360,7 +363,6 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         if (midiIt != midi.cend())
             end = std::min (end, (*midiIt).samplePosition);
 
-        updateVoiceParameters();
         updateEffects();
         render (left + pos, right != nullptr ? right + pos : nullptr, end - pos, pos);
         apply (allocator.advance (end - pos));
@@ -510,18 +512,34 @@ juce::AudioProcessorEditor* RotorAudioProcessor::createEditor()
     return new juce::GenericAudioProcessorEditor (*this);
 }
 
+// State: the parameters plus the row preset memory and preset name, in one XML document.
+// (v1.1–v1.8 saved the parameter tree alone; those sessions still load.)
 void RotorAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    auto copy = state.copyState();
-    if (auto xml = copy.createXml())
-        copyXmlToBinary (*xml, destData);
+    juce::XmlElement root ("RotorPlugin");
+    root.setAttribute ("stateVersion", 2);
+    if (auto params = state.copyState().createXml())
+        root.addChildElement (params.release());
+    if (auto rows = presetManager.toValueTree().createXml())
+        root.addChildElement (rows.release());
+    copyXmlToBinary (root, destData);
 }
 
 void RotorAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        if (xml->hasTagName (state.state.getType()))
-            state.replaceState (juce::ValueTree::fromXml (*xml));
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+    if (xml == nullptr)
+        return;
+
+    const juce::XmlElement* params = xml.get();
+    if (xml->hasTagName ("RotorPlugin"))
+    {
+        params = xml->getChildByName (state.state.getType());
+        if (auto* rows = xml->getChildByName ("RowPresets"))
+            presetManager.fromValueTree (juce::ValueTree::fromXml (*rows));
+    }
+    if (params != nullptr && params->hasTagName (state.state.getType()))
+        state.replaceState (juce::ValueTree::fromXml (*params));
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
