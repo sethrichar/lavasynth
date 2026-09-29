@@ -93,6 +93,17 @@ private:
     std::atomic<float>* modEnvToSpreadParam = nullptr;
     std::atomic<float>* modEnvToFoldParam = nullptr;
     std::atomic<float>* envSyncParam = nullptr;
+    std::atomic<float>* lfoRateParam = nullptr;
+    std::atomic<float>* lfoRangeParam = nullptr;
+    std::atomic<float>* lfoShapeParam = nullptr;
+    std::atomic<float>* lfoKeyTrackParam = nullptr;
+    std::atomic<float>* lfoRetriggerParam = nullptr;
+    std::atomic<float>* lfoSyncParam = nullptr;
+    std::atomic<float>* lfoToPdParam = nullptr;
+    std::atomic<float>* lfoToCutoffParam = nullptr;
+    std::atomic<float>* lfoToSpreadParam = nullptr;
+    std::atomic<float>* lfoToFoldParam = nullptr;
+    std::atomic<float>* phaseDistParam = nullptr;
     double hostBpm = 120.0;
     std::atomic<float>* levelParam = nullptr;
 
@@ -117,6 +128,12 @@ private:
     juce::SmoothedValue<float> smoothedFold;
     juce::SmoothedValue<float> smoothedModEnvToCutoff;
     juce::SmoothedValue<float> smoothedModEnvToFold;
+    juce::SmoothedValue<float> smoothedLfoRate;
+    juce::SmoothedValue<float> smoothedLfoToPd;
+    juce::SmoothedValue<float> smoothedLfoToCutoff;
+    juce::SmoothedValue<float> smoothedLfoToFold;
+    juce::SmoothedValue<float> smoothedModEnvToPd;
+    juce::SmoothedValue<float> smoothedPhaseDist;
     juce::SmoothedValue<float> smoothedLevel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RotorAudioProcessor)

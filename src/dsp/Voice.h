@@ -4,6 +4,7 @@
 #include "Envelope.h"
 #include "Glide.h"
 #include "LadderFilter.h"
+#include "Lfo.h"
 #include "Oscillator.h"
 #include "Shapers.h"
 
@@ -15,13 +16,33 @@ namespace rotor
 // One of the five fixed voices. Runs at the oversampled rate (see Decimator4x):
 //   [main osc + sub osc + noise] → OSC-level overdrive → ladder filter → wavefolder
 //   → amp envelope → voice level
-// The mod envelope (one per voice, shared controls) modulates cutoff and wavefolder here;
-// its other destinations (phase distortion, LFO rate, spreader) read getModEnvLevel().
+// The mod envelope and LFO (one each per voice, shared controls) modulate phase distortion,
+// cutoff, wavefolder and LFO rate here; the spreader (v1.6) reads getModEnvLevel()/getLfoValue().
+// Phase distortion, spreader and wavefolder fold back at the ends of their ranges.
 class Voice
 {
 public:
-    // OPEN: mod-envelope depth ranges. Full depth moves the cutoff this many octaves.
-    static constexpr double modEnvCutoffOctaves = 5.0;
+    // OPEN: modulation depth ranges.
+    static constexpr double modEnvCutoffOctaves = 5.0;  // mod env → cutoff at full depth
+    static constexpr double modEnvLfoRateOctaves = 4.0; // mod env → LFO rate at full depth
+    static constexpr double lfoCutoffOctaves = 4.0;     // LFO → cutoff at full depth (each way)
+
+    struct LfoSettings
+    {
+        Lfo::Shape shape = Lfo::Shape::sine;
+        double rateHz = 1.0;         // after range and host sync, before key tracking
+        double keyTrack = 0.0;       // -1..+1
+        bool retrigger = false;      // restart on every key press
+    };
+
+    // Bipolar depths, -1..+1 (the spreader depth is used in v1.6).
+    struct LfoDepths
+    {
+        double phaseDistortion = 0.0;
+        double cutoff = 0.0;
+        double spread = 0.0;
+        double fold = 0.0;
+    };
 
     // Bipolar depths, -1..+1.
     struct ModEnvDepths
@@ -63,12 +84,21 @@ public:
         // Wavefolder
         double fold = 0.0;           // 0..1
 
+        // Phase distortion on the main oscillator, -1..+1.
+        // OPEN: the hardware may have no base PD control (modulation only); this is the offset.
+        double phaseDistortion = 0.0;
+
         Envelope::Parameters amp;
         Envelope::Parameters mod;
         double ampKeyTrack = 0.0;    // -1..+1
         double modKeyTrack = 0.0;    // -1..+1
         ModEnvDepths modEnvDepth;
+        LfoSettings lfo;
+        LfoDepths lfoDepth;
     };
+
+    // Gives each voice its own random sequence (Volcano LFO).
+    void setSeed (std::uint32_t seed) { lfo = Lfo (seed); lfo.setSampleRate (sampleRate); }
 
     static double midiNoteToHz (double note) { return 440.0 * std::pow (2.0, (note - 69.0) / 12.0); }
 
@@ -82,6 +112,7 @@ public:
         env.setSampleRate (sampleRate);
         modEnv.setSampleRate (sampleRate);
         glide.setSampleRate (sampleRate);
+        lfo.setSampleRate (sampleRate);
         levelCoef = 1.0 - std::exp (-1.0 / (levelSmoothingSeconds * sampleRate));
         reset();
     }
@@ -106,6 +137,7 @@ public:
         sub.setWaveform (p.subWaveform == SubWaveform::square ? Waveform::square : Waveform::sine);
         env.setParameters (p.amp);
         modEnv.setParameters (p.mod);
+        lfo.setShape (p.lfo.shape);
         glide.setTimePerOctave (p.glideSecondsPerOctave);
         if (pitchChanged)
             updateFrequency();
@@ -128,6 +160,8 @@ public:
         updateEnvelopeRates();
         env.noteOn();
         modEnv.noteOn();
+        if (params.lfo.retrigger)
+            lfo.reset();
         updateModulation();
     }
 
@@ -154,10 +188,15 @@ public:
     double getModEnvLevel() const { return modEnv.getLevel(); }
     double getAmpEnvLevel() const { return env.getLevel(); }
     double getFoldAmount() const { return foldAmount; }
+    double getPhaseDistortion() const { return phaseDistortionAmount; }
+    float getLfoValue() const { return lfo.getValue(); }
+    double getLfoFrequency() const { return lfo.getFrequency(); }
 
     // noise: this sample of the shared (tilt-EQ'd) noise source.
     float process (float noise = 0.0f)
     {
+        lfo.process(); // free-running even while the voice is silent
+
         if (! env.isActive())
             return 0.0f;
 
@@ -204,18 +243,28 @@ private:
         modEnv.setRateScale (keyTrackedRate (pitch, params.modKeyTrack));
     }
 
-    // Cutoff and wavefolder follow the mod envelope, refreshed every few samples.
+    // Mod envelope + LFO destinations, refreshed every few samples.
     void updateModulation()
     {
         modulationCountdown = modulationInterval;
         const double m = modEnv.getLevel();
+        const double l = lfo.getValue();
+        const double pitch = pitchForTracking();
+        const auto& envDepth = params.modEnvDepth;
+        const auto& lfoDepth = params.lfoDepth;
 
-        const double cutoff = keyTrackedCutoff (params.cutoffHz, pitchForTracking(), params.keyTrack)
-                              * std::exp2 (params.modEnvDepth.cutoff * m * modEnvCutoffOctaves);
+        lfo.setFrequency (params.lfo.rateHz * keyTrackedRate (pitch, params.lfo.keyTrack)
+                          * std::exp2 (envDepth.lfoRate * m * modEnvLfoRateOctaves));
+
+        const double cutoff = keyTrackedCutoff (params.cutoffHz, pitch, params.keyTrack)
+                              * std::exp2 (envDepth.cutoff * m * modEnvCutoffOctaves + lfoDepth.cutoff * l * lfoCutoffOctaves);
         filter.setParameters (cutoff, params.resonance, params.filterMode);
 
-        // Control-signal wavefolding: past the ends of the range the amount reflects back.
-        foldAmount = foldIntoRange (params.fold + params.modEnvDepth.fold * m, 0.0, 1.0);
+        // Control-signal wavefolding: past the ends of the range these reflect back.
+        foldAmount = foldIntoRange (params.fold + envDepth.fold * m + lfoDepth.fold * l, 0.0, 1.0);
+        phaseDistortionAmount = foldIntoRange (params.phaseDistortion + envDepth.phaseDistortion * m
+                                                   + lfoDepth.phaseDistortion * l, -1.0, 1.0);
+        osc.setPhaseDistortion (phaseDistortionAmount);
     }
 
     static constexpr double levelSmoothingSeconds = 0.01;
@@ -231,7 +280,9 @@ private:
     Envelope env;
     Envelope modEnv;
     Glide glide;
+    Lfo lfo;
     double foldAmount = 0.0;
+    double phaseDistortionAmount = 0.0;
     int modulationCountdown = 0;
     int currentNote = -1;
     float velocity = 1.0f;

@@ -51,6 +51,21 @@ RotorAudioProcessor::RotorAudioProcessor()
     modEnvToSpreadParam = state.getRawParameterValue (modEnvToSpread);
     modEnvToFoldParam = state.getRawParameterValue (modEnvToFold);
     envSyncParam = state.getRawParameterValue (envSync);
+    lfoRateParam = state.getRawParameterValue (lfoRate);
+    lfoRangeParam = state.getRawParameterValue (lfoRange);
+    lfoShapeParam = state.getRawParameterValue (lfoShape);
+    lfoKeyTrackParam = state.getRawParameterValue (lfoKeyTrack);
+    lfoRetriggerParam = state.getRawParameterValue (lfoRetrigger);
+    lfoSyncParam = state.getRawParameterValue (lfoSync);
+    lfoToPdParam = state.getRawParameterValue (lfoToPd);
+    lfoToCutoffParam = state.getRawParameterValue (lfoToCutoff);
+    lfoToSpreadParam = state.getRawParameterValue (lfoToSpread);
+    lfoToFoldParam = state.getRawParameterValue (lfoToFold);
+    phaseDistParam = state.getRawParameterValue (phaseDist);
+
+    // Each voice's Volcano LFO gets its own random sequence.
+    for (int i = 0; i < rotor::numVoices; ++i)
+        voices[(size_t) i].setSeed (0x9E3779B9u * (std::uint32_t) (i + 1));
     levelParam = state.getRawParameterValue (level);
 }
 
@@ -88,6 +103,12 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
     initControl (smoothedFold, foldParam);
     initControl (smoothedModEnvToCutoff, modEnvToCutoffParam);
     initControl (smoothedModEnvToFold, modEnvToFoldParam);
+    initControl (smoothedLfoRate, lfoRateParam);
+    initControl (smoothedLfoToPd, lfoToPdParam);
+    initControl (smoothedLfoToCutoff, lfoToCutoffParam);
+    initControl (smoothedLfoToFold, lfoToFoldParam);
+    initControl (smoothedModEnvToPd, modEnvToPdParam);
+    initControl (smoothedPhaseDist, phaseDistParam);
     smoothedLevel.reset (sampleRate, smoothingSeconds);
     smoothedLevel.setCurrentAndTargetValue (levelParam->load());
 
@@ -120,11 +141,25 @@ void RotorAudioProcessor::updateVoiceParameters()
     p.mod = readEnvelope (modEnvParams);
     p.ampKeyTrack = ampEnvParams.keyTrack->load();
     p.modKeyTrack = modEnvParams.keyTrack->load();
-    p.modEnvDepth.phaseDistortion = modEnvToPdParam->load();
+    p.modEnvDepth.phaseDistortion = smoothedModEnvToPd.getNextValue();
     p.modEnvDepth.cutoff = smoothedModEnvToCutoff.getNextValue();
     p.modEnvDepth.lfoRate = modEnvToLfoRateParam->load();
     p.modEnvDepth.spread = modEnvToSpreadParam->load();
     p.modEnvDepth.fold = smoothedModEnvToFold.getNextValue();
+    p.phaseDistortion = smoothedPhaseDist.getNextValue();
+
+    const auto range = lfoRangeParam->load() >= 0.5f ? rotor::Lfo::Range::fast : rotor::Lfo::Range::slow;
+    double lfoHz = rotor::Lfo::rateToHz (smoothedLfoRate.getNextValue(), range);
+    if (lfoSyncParam->load() >= 0.5f) // LFO CLK: the period snaps to a note value
+        lfoHz = 1.0 / rotor::NoteValues::snapSeconds (1.0 / lfoHz, hostBpm);
+    p.lfo.rateHz = lfoHz;
+    p.lfo.shape = static_cast<rotor::Lfo::Shape> (juce::jlimit (0, 4, (int) lfoShapeParam->load()));
+    p.lfo.keyTrack = lfoKeyTrackParam->load();
+    p.lfo.retrigger = lfoRetriggerParam->load() >= 0.5f;
+    p.lfoDepth.phaseDistortion = smoothedLfoToPd.getNextValue();
+    p.lfoDepth.cutoff = smoothedLfoToCutoff.getNextValue();
+    p.lfoDepth.spread = lfoToSpreadParam->load();
+    p.lfoDepth.fold = smoothedLfoToFold.getNextValue();
 
     for (int i = 0; i < rotor::numVoices; ++i)
     {
@@ -178,6 +213,12 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     smoothedFold.setTargetValue (foldParam->load());
     smoothedModEnvToCutoff.setTargetValue (modEnvToCutoffParam->load());
     smoothedModEnvToFold.setTargetValue (modEnvToFoldParam->load());
+    smoothedLfoRate.setTargetValue (lfoRateParam->load());
+    smoothedLfoToPd.setTargetValue (lfoToPdParam->load());
+    smoothedLfoToCutoff.setTargetValue (lfoToCutoffParam->load());
+    smoothedLfoToFold.setTargetValue (lfoToFoldParam->load());
+    smoothedModEnvToPd.setTargetValue (modEnvToPdParam->load());
+    smoothedPhaseDist.setTargetValue (phaseDistParam->load());
     smoothedLevel.setTargetValue (levelParam->load());
 
     const int numSamples = buffer.getNumSamples();

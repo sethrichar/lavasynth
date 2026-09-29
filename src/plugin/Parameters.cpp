@@ -155,6 +155,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     // ENV CLK: envelope times snap to note values at the host tempo.
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { envSync, version }, "Envelope Sync", false));
 
+    // LFO
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { lfoRate, version }, "LFO Rate", NormalisableRange<float> (0.0f, 1.0f), 0.4f, percent));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { lfoRange, version }, "LFO Range", StringArray { "Slow", "Fast" }, 0));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { lfoShape, version }, "LFO Shape",
+        StringArray { "Volcano", "Square", "Reverse Saw", "Saw", "Sine" }, 4));
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { lfoKeyTrack, version }, "LFO Key Track", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { lfoRetrigger, version }, "LFO Retrigger", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { lfoSync, version }, "LFO Sync", false));
+    addDepth (lfoToPd, "LFO > Phase Dist");
+    addDepth (lfoToCutoff, "LFO > Cutoff");
+    addDepth (lfoToSpread, "LFO > Spread");
+    addDepth (lfoToFold, "LFO > Wavefolder");
+
+    // Phase distortion offset for the main oscillators; negative warps the other way.
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { phaseDist, version }, "Phase Distortion", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
+
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { level, version }, "Master Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f));
 

@@ -13,6 +13,32 @@ Each entry: what changed, what's broken, how to roll back.
 
 ## Code
 
+### v1.5 — 2026-09-29 — Modulation: looping envelopes, mod envelope, LFOs, phase distortion, host sync
+**Changed**
+- **Envelopes** (amp + mod, one each per voice, shared controls): analog-style RC curves; stage times are full-swing times,
+  so higher sustain shortens decay. **Loop** mode cycles attack → decay while held; fastest loop (A, D, S at minimum) is
+  C1 = 32.7 Hz. **Key Track** (bipolar): + = higher notes faster, − = lower notes faster, ±100% = double/halve per octave.
+  Minimum stage time is now 15.3 ms (half the fastest loop) — see OPEN_QUESTIONS.
+- **Mod envelope** with bipolar depths to phase distortion, cutoff (±5 oct), LFO rate (±4 oct), spreader (stored; used in
+  v1.6) and wavefolder.
+- **Control-signal wavefolding** (`foldIntoRange`): phase distortion, wavefolder (and later spreader) reflect at their limits.
+- **LFOs** (5, one per voice): Volcano (slewed S&H, two random values per cycle, own seed per voice), square, reverse saw,
+  saw, sine; **Slow** 0.064–4.8 Hz / **Fast** 1.02–65.4 Hz (ends tuned to C); key tracking; **Retrigger**; depths to phase
+  distortion, cutoff (±4 oct), spreader (stored; used in v1.6), wavefolder. Band-limited so audio-rate LFO works.
+- **Phase distortion** (CZ-style single-breakpoint warp) on the main oscillators, bipolar, plus a PD offset knob.
+- **Host sync**: Envelope Sync snaps A/D/R to note values (1/64 to 16 bars, straight/triplet/dotted); LFO Sync snaps the
+  LFO period. Tempo comes from the host (120 BPM if none).
+- Modulation (cutoff, fold, PD, LFO rate) refreshes every 8 samples at the 4× voice rate (24 kHz at 48 kHz).
+- 100 unit tests (26 new).
+
+**Validated**: unit tests pass, Linux pluginval passes at strictness 5 and 10, macOS workflow green (pluginval + auval).
+Full-plugin render with every modulator active: ≈ 15% of one 2.1 GHz cloud core, peak −1.5 dBFS, no NaNs.
+
+**Broken / not yet done**: spreader depths do nothing until v1.6 (stereo panning). LFO min-maxing to the effects is v1.7.
+LFO sync snaps the rate only (the LFO doesn't lock to the bar position). Many ranges are guesses — see OPEN_QUESTIONS.
+
+**Roll back**: `git checkout v1.4`.
+
 ### v1.4 — 2026-09-28 — Global section, real filter, wavefolder
 **Changed**
 - Voices now run **4× oversampled** (two halfband FIR stages back down: flat to 18 kHz, aliasing ≥ 60 dB down).

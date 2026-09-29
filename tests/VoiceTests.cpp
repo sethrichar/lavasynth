@@ -228,3 +228,80 @@ TEST_CASE ("Mod envelope on the wavefolder folds back at the top of the range", 
     CHECK (highest == Catch::Approx (1.0).margin (0.01)); // passed through the top…
     CHECK (v.getFoldAmount() == Catch::Approx (0.6).margin (0.01)); // …and reflected back down
 }
+
+TEST_CASE ("LFO modulates cutoff, follows key tracking, and mod env speeds it up", "[voice][lfo]")
+{
+    Voice v;
+    v.prepare (192000.0);
+    Voice::Parameters p;
+    p.cutoffHz = 1000.0;
+    p.lfo.shape = rotor::Lfo::Shape::sine;
+    p.lfo.rateHz = 4.0;
+    p.lfoDepth.cutoff = 0.5; // ±2 octaves
+    v.setParameters (p);
+    v.noteOn (60, 1.0f);
+
+    double lo = 1e9, hi = 0.0;
+    for (int i = 0; i < 192000 / 2; ++i)
+    {
+        v.process();
+        lo = std::min (lo, v.getFilterCutoff());
+        hi = std::max (hi, v.getFilterCutoff());
+    }
+    CHECK (hi == Catch::Approx (4000.0).epsilon (0.02));
+    CHECK (lo == Catch::Approx (250.0).epsilon (0.02));
+    CHECK (v.getLfoFrequency() == Catch::Approx (4.0));
+
+    // Key tracking: an octave up doubles the rate at +100%.
+    p.lfo.keyTrack = 1.0;
+    v.setParameters (p);
+    v.noteOn (72, 1.0f);
+    CHECK (v.getLfoFrequency() == Catch::Approx (8.0));
+
+    // Mod env → LFO rate: sustaining at 1 with full depth = +4 octaves.
+    p.lfo.keyTrack = 0.0;
+    p.mod = { 0.02, 1.0, 1.0, 0.1, false };
+    p.modEnvDepth.lfoRate = 1.0;
+    v.setParameters (p);
+    v.noteOn (60, 1.0f);
+    for (int i = 0; i < 192000 / 10; ++i)
+        v.process();
+    CHECK (v.getLfoFrequency() == Catch::Approx (64.0).epsilon (0.01));
+}
+
+TEST_CASE ("LFO retrigger restarts the LFO on key press", "[voice][lfo]")
+{
+    Voice v;
+    v.prepare (192000.0);
+    Voice::Parameters p;
+    p.lfo.shape = rotor::Lfo::Shape::saw;
+    p.lfo.rateHz = 1.0;
+    p.lfo.retrigger = true;
+    v.setParameters (p);
+    for (int i = 0; i < 50000; ++i)
+        v.process();
+    v.noteOn (60, 1.0f);
+    v.process();
+    v.process(); // past the band-limited reset
+    CHECK (v.getLfoValue() == Catch::Approx (-1.0f).margin (0.01));
+}
+
+TEST_CASE ("Phase distortion modulation folds at ±1", "[voice][phase distortion]")
+{
+    Voice v;
+    v.prepare (192000.0);
+    Voice::Parameters p;
+    p.phaseDistortion = 0.5;
+    p.mod = { 0.02, 5.0, 1.0, 0.1, false };
+    p.modEnvDepth.phaseDistortion = 1.0; // 0.5 + 1 = 1.5 → folds to 0.5
+    v.setParameters (p);
+    v.noteOn (60, 1.0f);
+    double highest = -2.0;
+    for (int i = 0; i < 192000 / 10; ++i)
+    {
+        v.process();
+        highest = std::max (highest, v.getPhaseDistortion());
+    }
+    CHECK (highest == Catch::Approx (1.0).margin (0.01));
+    CHECK (v.getPhaseDistortion() == Catch::Approx (0.5).margin (0.01));
+}

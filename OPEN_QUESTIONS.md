@@ -42,9 +42,14 @@ When one is resolved: move it to "Resolved", note the source and the date, and u
 - [ ] Mod envelope depth ranges. (Assumed: cutoff ±5 octaves at full depth; wavefolder ±1 of its range, folding at the ends.)
 - [ ] ENV CLK note grid. (Assumed: 1/64 note to 16 bars, straight/triplet/dotted; a 1-hour release snaps to the longest value.)
 - [ ] How much sustain shortens A/D in loop mode.
-- [ ] Phase distortion algorithm (CZ-style assumed).
+- [ ] Phase distortion algorithm. (Assumed: CZ-style single breakpoint warp, clamped to ±95%.) Is there a PD base knob,
+  or is PD modulation-only? (Plugin adds an offset knob, default 0.)
 - [ ] Key-tracking knob ranges (amp env, mod env, filter, LFO).
-- [ ] Volcano LFO slew amount.
+- [ ] Volcano LFO slew amount. (Assumed: raised-cosine glide over each half cycle — maximally smooth.)
+- [ ] LFO depth ranges. (Assumed: cutoff ±4 octaves; PD/wavefolder ±1 of range, folding.) Mod env → LFO rate: ±4 octaves.
+- [ ] LFO key-tracking reference note. (Assumed: middle C = the panel rate.)
+- [ ] LFO sync: does it lock phase to the host's bar position, or only snap the rate? (Assumed: rate only.)
+- [ ] LFO starting phase per voice when free-running. (Assumed: all start at 0 when the plugin loads, then drift apart.)
 
 ## Wildcards (priority 3)
 - [ ] Depth ranges and rates for note detune, wow, flutter, reel drag.
