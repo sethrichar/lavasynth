@@ -39,10 +39,38 @@ public:
 
     void reset (double startPhase = 0.0) { phase = startPhase; }
 
+    // Phase distortion (CZ-style): -1..+1, 0 = off. The phase runs through the first half of
+    // the waveform faster (positive) or slower (negative) than the second half, which sharpens
+    // the wave; negative amounts warp in the opposite direction.
+    // OPEN: the hardware's exact PD algorithm (a single breakpoint warp is assumed).
+    static constexpr double maxPhaseDistortion = 0.95;
+
+    void setPhaseDistortion (double amount)
+    {
+        const double d = std::fmax (-maxPhaseDistortion, std::fmin (maxPhaseDistortion, amount));
+        breakpoint = 0.5 * (1.0 - d);
+        warping = std::fabs (d) > 1e-6;
+    }
+
     float process()
     {
-        const double t = phase;
-        const double dt = increment;
+        double t = phase;
+        double dt = increment;
+        if (warping)
+        {
+            // Warp the phase; the band-limiting uses the local phase speed.
+            if (t < breakpoint)
+            {
+                t = 0.5 * t / breakpoint;
+                dt *= 0.5 / breakpoint;
+            }
+            else
+            {
+                t = 0.5 + 0.5 * (t - breakpoint) / (1.0 - breakpoint);
+                dt *= 0.5 / (1.0 - breakpoint);
+            }
+            dt = std::fmin (dt, 0.49);
+        }
         double y = 0.0;
 
         switch (waveform)
@@ -71,7 +99,7 @@ public:
                 break;
         }
 
-        phase += dt;
+        phase += increment;
         if (phase >= 1.0) phase -= 1.0;
 
         return static_cast<float> (y);
@@ -133,6 +161,8 @@ private:
     double sampleRate = 44100.0;
     double phase = 0.0;
     double increment = 0.0;
+    double breakpoint = 0.5;
+    bool warping = false;
     Waveform waveform = Waveform::sharkTooth;
 };
 

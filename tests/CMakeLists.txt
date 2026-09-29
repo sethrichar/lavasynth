@@ -16,7 +16,8 @@ add_executable(rotor_tests
     LadderFilterTests.cpp
     NoiseTests.cpp
     ShaperTests.cpp
-    OversamplingTests.cpp)
+    OversamplingTests.cpp
+    LfoTests.cpp)
 
 target_link_libraries(rotor_tests PRIVATE rotor_dsp Catch2::Catch2WithMain)
 

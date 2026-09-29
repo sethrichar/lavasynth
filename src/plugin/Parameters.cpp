@@ -1,5 +1,7 @@
 #include "Parameters.h"
 
+#include "dsp/Envelope.h"
+
 namespace rotor::params
 {
 
@@ -110,15 +112,69 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { fold, version }, "Wavefolder", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
 
-    // OPEN: envelope min times / slider curves. Max release ≈ 1 hour per the manual.
+    // Envelopes. OPEN: slider curves. Minimum = half the fastest loop (C1); max release ≈ 1 hour.
+    const float minTime = (float) rotor::Envelope::minTimeSeconds;
+    auto bipolarPercent = AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) {
+        const int pc = juce::roundToInt (v * 100.0f);
+        return pc == 0 ? String ("Off") : (pc > 0 ? "+" : "") + String (pc) + "%";
+    });
+
+    auto addEnvelope = [&] (const char* a, const char* d, const char* sus, const char* r, const char* loop,
+                            const char* kt, const String& prefix)
+    {
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { a, version }, prefix + "Attack", timeRange (minTime, 20.0f), minTime, timeAttributes()));
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { d, version }, prefix + "Decay", timeRange (minTime, 60.0f), 0.3f, timeAttributes()));
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { sus, version }, prefix + "Sustain", NormalisableRange<float> (0.0f, 1.0f), 0.7f));
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { r, version }, prefix + "Release", timeRange (minTime, 3600.0f), 0.3f, timeAttributes()));
+        layout.add (std::make_unique<AudioParameterBool> (ParameterID { loop, version }, prefix + "Loop", false));
+        // Clockwise (+) = higher notes faster; counter-clockwise (−) = lower notes faster.
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { kt, version }, prefix + "Key Track", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
+    };
+
+    // IDs "attack"/"decay"/"sustain"/"release" are the amp envelope (kept from v1.1).
+    addEnvelope (attack, decay, sustain, release, ampLoop, ampKeyTrack, "Amp ");
+    addEnvelope (modAttack, modDecay, modSustain, modRelease, modLoop, modKeyTrack, "Mod Env ");
+
+    // Mod envelope destinations: bipolar depth, centre = off.
+    auto addDepth = [&] (const char* id, const String& name)
+    {
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { id, version }, name, NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
+    };
+    addDepth (modEnvToPd, "Mod Env > Phase Dist");
+    addDepth (modEnvToCutoff, "Mod Env > Cutoff");
+    addDepth (modEnvToLfoRate, "Mod Env > LFO Rate");
+    addDepth (modEnvToSpread, "Mod Env > Spread");
+    addDepth (modEnvToFold, "Mod Env > Wavefolder");
+
+    // ENV CLK: envelope times snap to note values at the host tempo.
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { envSync, version }, "Envelope Sync", false));
+
+    // LFO
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { attack, version }, "Attack", timeRange (0.001f, 20.0f), 0.005f, timeAttributes()));
+        ParameterID { lfoRate, version }, "LFO Rate", NormalisableRange<float> (0.0f, 1.0f), 0.4f, percent));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { lfoRange, version }, "LFO Range", StringArray { "Slow", "Fast" }, 0));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { lfoShape, version }, "LFO Shape",
+        StringArray { "Volcano", "Square", "Reverse Saw", "Saw", "Sine" }, 4));
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { decay, version }, "Decay", timeRange (0.001f, 60.0f), 0.3f, timeAttributes()));
+        ParameterID { lfoKeyTrack, version }, "LFO Key Track", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { lfoRetrigger, version }, "LFO Retrigger", false));
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { lfoSync, version }, "LFO Sync", false));
+    addDepth (lfoToPd, "LFO > Phase Dist");
+    addDepth (lfoToCutoff, "LFO > Cutoff");
+    addDepth (lfoToSpread, "LFO > Spread");
+    addDepth (lfoToFold, "LFO > Wavefolder");
+
+    // Phase distortion offset for the main oscillators; negative warps the other way.
     layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { sustain, version }, "Sustain", NormalisableRange<float> (0.0f, 1.0f), 0.7f));
-    layout.add (std::make_unique<AudioParameterFloat> (
-        ParameterID { release, version }, "Release", timeRange (0.001f, 3600.0f), 0.3f, timeAttributes()));
+        ParameterID { phaseDist, version }, "Phase Distortion", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { level, version }, "Master Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f));

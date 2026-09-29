@@ -38,6 +38,14 @@ int main (int argc, char** argv)
     set (p, "keyTrack", 0.5f);
     set (p, "fold", 0.4f);
     set (p, "release", 1.5f);
+    set (p, "modDecay", 0.4f);
+    set (p, "modSustain", 0.2f);
+    set (p, "modEnvToCutoff", 0.4f);
+    set (p, "lfoShape", 0);          // Volcano
+    set (p, "lfoRate", 0.7f);
+    set (p, "lfoKeyTrack", 0.5f);
+    set (p, "lfoToCutoff", 0.2f);
+    set (p, "lfoToPd", 0.4f);
 
     const int totalBlocks = (int) (seconds * sr / block);
     juce::AudioBuffer<float> buffer (2, block);
