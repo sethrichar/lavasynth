@@ -176,6 +176,78 @@ static int checkPresets()
     expect (value ("mpe") < 0.5f, "loading a preset leaves the global options alone");
     PresetManager::getUserPresetFolder().getChildFile ("zz RenderCheck Test.rotorpreset").deleteFile();
 
+    // 7. Dice: 60 random panels all render finite audio at a sane level.
+    {
+        pm.loadPreset (0);
+        int bad = 0;
+        double loudest = 0.0, quietest = 1e9;
+        for (int roll = 0; roll < 60; ++roll)
+        {
+            pm.randomizeAll();
+            double peak = 0.0;
+            bool finite = true;
+            for (int b = 0; b < 300; ++b)
+            {
+                juce::MidiBuffer midi;
+                if (b == 0)
+                    for (int n : { 48, 55, 60, 64 })
+                        midi.addEvent (juce::MidiMessage::noteOn (1, n, 0.8f), 0);
+                if (b == 200)
+                    for (int n : { 48, 55, 60, 64 })
+                        midi.addEvent (juce::MidiMessage::noteOff (1, n), 0);
+                p.processBlock (buffer, midi);
+                for (int ch = 0; ch < 2; ++ch)
+                    for (int s = 0; s < 256; ++s)
+                    {
+                        const float y = buffer.getSample (ch, s);
+                        finite = finite && std::isfinite (y);
+                        peak = std::max (peak, (double) std::abs (y));
+                    }
+            }
+            // Let any long release die away before the next roll.
+            juce::MidiBuffer none;
+            p.processBlock (buffer, none);
+            loudest = std::max (loudest, peak);
+            quietest = std::min (quietest, peak);
+            if (! finite || peak > 2.0 || peak < 0.005)
+            {
+                ++bad;
+                std::printf ("      roll %d: peak %.3f finite %d\n", roll, peak, (int) finite);
+            }
+        }
+        std::printf ("      60 rolls: peaks %.3f … %.3f\n", quietest, loudest);
+        expect (bad == 0, "every dice roll renders finite audio at a sane level");
+    }
+
+    // 8. Row dice change only that row.
+    {
+        pm.loadPreset (0);
+        const auto before = pm.snapshot();
+        pm.randomizeRow (Row::motion);
+        int changedOther = 0, changedRow = 0;
+        const auto after = pm.snapshot();
+        for (size_t i = 0; i < before.size(); ++i)
+            if (std::abs (before[i].second - after[i].second) > 1e-6f)
+                (rotor::presets::rowOf (before[i].first) == Row::motion ? changedRow : changedOther)++;
+        expect (changedRow > 3 && changedOther == 0, "row dice randomizes only its row");
+    }
+
+    // 9. Panel mode bypasses presets and slots; turning it off restores normal recall.
+    {
+        pm.loadPreset (0);
+        pm.setFullMode (true);
+        setv ("cutoff", 1234.0f);
+        pm.storeSlot (Row::shaping, 5);
+        setv ("cutoff", 4321.0f);
+        pm.setPanelMode (true);
+        pm.recallSlot (Row::shaping, 5);
+        pm.loadPreset (1);
+        expect (std::abs (value ("cutoff") - 4321.0f) < 1.0f, "panel mode bypasses slot recall and preset loads");
+        pm.setPanelMode (false);
+        pm.recallSlot (Row::shaping, 5);
+        expect (std::abs (value ("cutoff") - 1234.0f) < 1.0f, "turning panel mode off restores recall");
+    }
+
     std::printf ("%s\n", failures == 0 ? "ALL PRESET CHECKS PASSED" : "PRESET CHECKS FAILED");
     return failures == 0 ? 0 : 1;
 }
@@ -194,6 +266,7 @@ static int screenshot (int argc, char** argv)
         if (arg.endsWith (".png")) out = arg;
         else if (arg.startsWith ("--preset=")) p.getPresetManager().loadPreset (arg.fromFirstOccurrenceOf ("=", false, false).getIntValue());
         else if (arg == "--options") showOptions = true;
+        else if (arg == "--panel") p.getPresetManager().setPanelMode (true);
         else if (arg.contains ("=") && ! arg.startsWith ("--"))
             if (auto* param = p.getState().getParameter (arg.upToFirstOccurrenceOf ("=", false, false)))
                 param->setValueNotifyingHost (param->convertTo0to1 (arg.fromFirstOccurrenceOf ("=", false, false).getFloatValue()));

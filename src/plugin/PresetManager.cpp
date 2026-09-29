@@ -1,5 +1,7 @@
 #include "PresetManager.h"
 
+#include "Randomizer.h"
+
 using rotor::presets::Row;
 using rotor::presets::rowOf;
 using rotor::presets::Snapshot;
@@ -121,6 +123,8 @@ void PresetManager::resetToDefaults()
 
 void PresetManager::loadPreset (int index)
 {
+    if (panelMode)
+        return; // panel mode bypasses presets
     const auto names = getPresetNames();
     if (index < 0 || index >= names.size())
         return;
@@ -185,13 +189,40 @@ void PresetManager::storeSlot (Row row, int slot)
 
 void PresetManager::recallSlot (Row row, int slot)
 {
+    if (panelMode)
+        return; // panel mode bypasses presets
     apply (fullMode ? bank.recallFull (slot) : bank.recall (row, slot));
+}
+
+void PresetManager::randomizeRow (Row row)
+{
+    rotor::presets::Randomizer dice ((std::uint32_t) juce::Random::getSystemRandom().nextInt() | 1u);
+
+    std::vector<std::string> ids;
+    for (auto* p : state.processor.getParameters())
+        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+            ids.push_back (ranged->getParameterID().toStdString());
+
+    std::vector<std::string> fallbacks;
+    auto values = dice.roll (row, ids, &fallbacks);
+    // Any parameter without a rule: uniform across its own range.
+    for (const auto& id : fallbacks)
+        if (auto* p = state.getParameter (juce::String (id)))
+            values.emplace_back (id, p->convertFrom0to1 ((float) dice.uniform()));
+    apply (values);
+}
+
+void PresetManager::randomizeAll()
+{
+    for (int r = 0; r < rotor::presets::numRows; ++r)
+        randomizeRow (static_cast<Row> (r));
 }
 
 juce::ValueTree PresetManager::toValueTree() const
 {
     juce::ValueTree tree ("RowPresets");
     tree.setProperty ("fullMode", fullMode, nullptr);
+    tree.setProperty ("panelMode", panelMode, nullptr);
     tree.setProperty ("presetName", currentName, nullptr);
     tree.setProperty ("presetIndex", currentIndex, nullptr);
     for (int r = 0; r < rotor::presets::numRows; ++r)
@@ -220,6 +251,7 @@ void PresetManager::fromValueTree (const juce::ValueTree& tree)
     if (! tree.hasType ("RowPresets"))
         return;
     fullMode = tree.getProperty ("fullMode", true);
+    panelMode = tree.getProperty ("panelMode", false);
     currentName = tree.getProperty ("presetName", "Init").toString();
     currentIndex = tree.getProperty ("presetIndex", 0);
     bank = {};

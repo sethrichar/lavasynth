@@ -73,6 +73,10 @@ All constants live in `src/dsp/WildcardTuning.h`; tune by ear.
   pressure, sliding continuously with pressure.)
 - [ ] Aftertouch ranges. (Assumed: cutoff ±3 oct, LFO rate ±3 oct; AT up blends the pitch wildcards additively.)
 
+## Panel mode (v1.10)
+- [ ] Hardware panel mode: does switching it on also bring back the panel you had before recalling a preset (the physical
+  slider positions)? (Assumed: it only bypasses presets/slots while on; the panel stays as it is.)
+
 ## Performance (v1.8) — constants in `src/dsp/PerformanceTuning.h`
 - [ ] Pitch bend range in normal MIDI mode. (Assumed ±2 st; MPE per-note ±48 st.)
 - [ ] What MPE timbre (CC74) controls. (Assumed: cutoff ±2 octaves.) Does the hardware support MPE zones / MCM?

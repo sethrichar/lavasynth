@@ -2,7 +2,7 @@
 
 > Working title only. Do NOT use "Katla", "Genki", or the Icelandic parameter names in code identifiers,
 > UI, bundle IDs, presets, or marketing. The Icelandic names appear below ONLY as a reference key to the manual.
-> Spec revision: 1.8 (working). Sources: the Katla User Manual and controls cheat sheet (kept on the owner's Mac only —
+> Spec revision: 1.7 (working). Sources: the Katla User Manual and controls cheat sheet (kept on the owner's Mac only —
 > NOT in this public repo). This spec is the complete reference; everything needed from those documents is summarized here.
 > Previous specs: `archive/`. Items the manual does not answer are marked **[OPEN]** and tracked in `OPEN_QUESTIONS.md`.
 
@@ -193,9 +193,6 @@ Plugin sidechain input replaces the five hardware inputs. Routing rules to emula
   - Row 2: Aftertouch, Amp Envelope, Mod Envelope, Filter
   - Row 3: LFO, Effects, Wildcards
   In the plugin: a preset menu per row plus full presets. Master-section toggles (EXT, sync) are probably not stored per row **[OPEN]**.
-- **Panel mode** (like the hardware): bypasses presets and gives full control of the panel as is. In the plugin, while it is on,
-  preset loads, row-slot recalls and host program changes are ignored; storing, saving and randomizing still work
-  **[OPEN: whether the hardware also restores the pre-preset panel when switched on]**.
 
 ## Beyond the hardware — voicing selectors (in the plugin since v1.6, owner decision 2026-09-29)
 - **Envelope Curve** (applies to amp + mod envelopes): Rotor, Punchy (Minimoog-inspired), Vintage Poly (Prophet-5/CEM3310-
@@ -204,14 +201,8 @@ Plugin sidechain input replaces the five hardware inputs. Routing rules to emula
   (SEM-inspired), Screaming 12dB (MS-20-inspired). Default Rotor.
 - Both stay as permanent controls, each with its own button in the final UI (v1.9). UI names stay generic (no brand names).
 
-## Beyond the hardware — dice (owner request 2026-09-29, in the plugin since v1.10)
-- A **dice** button per row (same size as a row-preset slot, centred under the 8 slots, above STORE) randomizes that row.
-- A **global dice** in the GLOBAL section randomizes all three rows. Global options are never randomized.
-- Randomizing is "musical": values stay in useful ranges, many depths/wildcards/effects stay at zero, at least one voice stays on.
-- The GLOBAL section also holds ENV SYNC and LFO SYNC buttons and the PANEL mode button (moved out of Options / LFO).
-
 ## Beyond the hardware (optional, post-v2 — not in the original)
-- (Done in v1.10 as the row/global dice.) ~~"Re-roll voices" button that randomizes per-voice level/octave/waveform within limits.~~
+- "Re-roll voices" button that randomizes per-voice level/octave/waveform within limits.
 - Seeded randomness so a bounce can be reproduced exactly.
 
 ## Milestones (tag each; one at a time)
@@ -225,7 +216,6 @@ Plugin sidechain input replaces the five hardware inputs. Routing rules to emula
 - **v1.8** — Aftertouch (3 modes), MPE, Global Detune / Pitch Drift, sidechain external inputs.
 - **v1.9** — Full + row presets, UI pass (including buttons for Envelope Curve and Filter Character). Layout can follow the hardware's 3-row functional grouping, but the visual design,
   colors, and names must be our own.
-- **v1.10** — Owner UI feedback: row + global dice (randomize), PANEL mode, ENV/LFO SYNC buttons in GLOBAL.
 - **v2** — First exported build for testing by others.
 
 ## Working rules for Claude Code
