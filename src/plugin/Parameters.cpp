@@ -214,6 +214,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     addDepth (lfoToFxAmount, "LFO > Effects Amount");
     addDepth (lfoToFxColor, "LFO > Effects Color");
 
+    // Aftertouch: three bipolar sliders.
+    addDepth (atWildcard, "AT > Wildcards / Clusters");
+    addDepth (atCutoff, "AT > Cutoff");
+    addDepth (atLfoRate, "AT > LFO Rate");
+
+    // Global options (the hardware's DIP switches).
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { mpe, version }, "MPE", false));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { modWheelMode, version }, "Mod Wheel", StringArray { "Wildcards", "Pitch LFO" }, 0));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { tuneMode, version }, "Tune Mode", StringArray { "Global Detune", "Pitch Drift" }, 0));
+    // Global Detune: ±1 semitone. Pitch Drift: + = drift amount, − = global detune (per the manual).
+    layout.add (std::make_unique<AudioParameterFloat> (
+        ParameterID { tune, version }, "Tune", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
+    // EXT: the sidechain input replaces the noise (Noise Level then sets the input level).
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { extInput, version }, "EXT Input", false));
+
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { level, version }, "Master Level", NormalisableRange<float> (0.0f, 1.0f), 0.7f));
 

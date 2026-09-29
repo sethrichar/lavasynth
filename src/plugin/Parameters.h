@@ -104,6 +104,18 @@ inline constexpr const char* lfoToDriveMix = "lfoToDriveMix";
 inline constexpr const char* lfoToFxAmount = "lfoToFxAmount";
 inline constexpr const char* lfoToFxColor = "lfoToFxColor";
 
+// Aftertouch (bipolar, centre = off)
+inline constexpr const char* atWildcard = "atWildcard";
+inline constexpr const char* atCutoff = "atCutoff";
+inline constexpr const char* atLfoRate = "atLfoRate";
+
+// Global options
+inline constexpr const char* mpe = "mpe";
+inline constexpr const char* modWheelMode = "modWheelMode";
+inline constexpr const char* tuneMode = "tuneMode";
+inline constexpr const char* tune = "tune";
+inline constexpr const char* extInput = "extInput";
+
 // Master
 inline constexpr const char* level = "level";
 

@@ -11,7 +11,9 @@ namespace
 } // namespace
 
 RotorAudioProcessor::RotorAudioProcessor()
-    : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+    : AudioProcessor (BusesProperties()
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                          .withInput ("Sidechain", juce::AudioChannelSet::stereo(), false)),
       state (*this, nullptr, "RotorState", rotor::params::createLayout())
 {
     using namespace rotor::params;
@@ -79,6 +81,16 @@ RotorAudioProcessor::RotorAudioProcessor()
     lfoToDriveMixParam = state.getRawParameterValue (lfoToDriveMix);
     lfoToFxAmountParam = state.getRawParameterValue (lfoToFxAmount);
     lfoToFxColorParam = state.getRawParameterValue (lfoToFxColor);
+    atWildcardParam = state.getRawParameterValue (atWildcard);
+    atCutoffParam = state.getRawParameterValue (atCutoff);
+    atLfoRateParam = state.getRawParameterValue (atLfoRate);
+    mpeParam = state.getRawParameterValue (mpe);
+    modWheelModeParam = state.getRawParameterValue (modWheelMode);
+    tuneModeParam = state.getRawParameterValue (tuneMode);
+    tuneParam = state.getRawParameterValue (tune);
+    extInputParam = state.getRawParameterValue (extInput);
+    noteChannel.fill (1);
+    voiceChannel.fill (1);
     filterCharacterParam = state.getRawParameterValue (filterCharacter);
 
     // Each voice: its spreader position and its own random sequences (LFO, wildcards).
@@ -90,11 +102,24 @@ RotorAudioProcessor::RotorAudioProcessor()
 bool RotorAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto& out = layouts.getMainOutputChannelSet();
-    return out == juce::AudioChannelSet::stereo() || out == juce::AudioChannelSet::mono();
+    if (out != juce::AudioChannelSet::stereo() && out != juce::AudioChannelSet::mono())
+        return false;
+    // Sidechain (EXT): off, mono (input 1 → every voice) or stereo (see extSourceFor).
+    const auto in = layouts.getMainInputChannelSet();
+    return in.isDisabled() || in == juce::AudioChannelSet::mono() || in == juce::AudioChannelSet::stereo();
 }
 
-void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
+void RotorAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    extBuffer.setSize (2, std::max (1, samplesPerBlock));
+    extBuffer.clear();
+    extTiltLeft.setSampleRate (sampleRate);
+    extTiltRight.setSampleRate (sampleRate);
+    extTiltLeft.reset();
+    extTiltRight.reset();
+    std::fill (std::begin (previousExt), std::end (previousExt), 0.0f);
+    expression.reset();
+
     for (auto& v : voices)
         v.prepare (sampleRate * rotor::Decimator4x::factor);
     decimatorLeft.reset();
@@ -105,7 +130,6 @@ void RotorAudioProcessor::prepareToPlay (double sampleRate, int)
     noise.reset();
     noiseTilt.setSampleRate (sampleRate);
     noiseTilt.reset();
-    previousNoise = 0.0f;
     allocator.reset();
     allocator.setGraceSamples ((int) (rotor::VoiceAllocator::defaultGraceSeconds * sampleRate));
 
@@ -151,7 +175,11 @@ void RotorAudioProcessor::updateVoiceParameters()
     allocator.setGracePeriod (unisonGraceParam->load() >= 0.5f);
     allocator.setMonoPriority (static_cast<Allocator::MonoPriority> (juce::jlimit (0, 2, (int) monoPriorityParam->load())));
 
-    noiseTilt.setColor (smoothedNoiseColor.getNextValue());
+    const float color = smoothedNoiseColor.getNextValue();
+    noiseTilt.setColor (color);
+    extTiltLeft.setColor (color); // EXT goes through the same tilt EQ
+    extTiltRight.setColor (color);
+    expression.setMpe (mpeParam->load() >= 0.5f);
 
     rotor::Voice::Parameters p;
     p.oscLevel = smoothedOscLevel.getNextValue();
@@ -198,12 +226,31 @@ void RotorAudioProcessor::updateVoiceParameters()
     p.wild.envScatter = envScatterParam->load();
     p.spread = smoothedSpread.getNextValue();
 
+    p.atWildcard = atWildcardParam->load();
+    p.atCutoff = atCutoffParam->load();
+    p.atLfoRate = atLfoRateParam->load();
+    const bool wheelPitchLfo = modWheelModeParam->load() >= 0.5f;
+    // OPEN: which wildcards the wheel blends in and how deep (assumed: the four pitch wildcards, fully).
+    p.wheelWildcardBlend = wheelPitchLfo ? 0.0 : expression.getWheel();
+    p.wheelPitchLfo = wheelPitchLfo ? expression.getWheel() : 0.0;
+    const double tuneValue = tuneParam->load();
+    if (tuneModeParam->load() >= 0.5f) // Pitch Drift: + = drift, − = global detune
+    {
+        p.pitchDrift = std::max (0.0, tuneValue);
+        p.globalDetune = std::min (0.0, tuneValue);
+    }
+    else
+    {
+        p.globalDetune = tuneValue;
+    }
+
     for (int i = 0; i < rotor::numVoices; ++i)
     {
         const auto& vp = voiceParams[(size_t) i];
         p.waveform = static_cast<rotor::Waveform> (juce::jlimit (0, rotor::numWaveforms - 1, (int) vp.waveform->load()));
         p.octave = juce::jlimit (-2, 2, juce::roundToInt (vp.octave->load()));
         p.level = vp.level->load();
+        voices[(size_t) i].setExpression (expression.forChannel (voiceChannel[(size_t) i]));
         voices[(size_t) i].setParameters (p);
     }
 
@@ -256,6 +303,15 @@ rotor::Envelope::Parameters RotorAudioProcessor::readEnvelope (const EnvelopePar
 void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+
+    // Copy the sidechain before the buffer (shared with the output) is cleared.
+    {
+        const auto input = getBusBuffer (buffer, true, 0);
+        extChannels = std::min (input.getNumChannels(), 2);
+        const int n = std::min (buffer.getNumSamples(), extBuffer.getNumSamples());
+        for (int ch = 0; ch < extChannels; ++ch)
+            extBuffer.copyFrom (ch, 0, input, ch, 0, n);
+    }
     buffer.clear();
 
     if (auto* host = getPlayHead())
@@ -306,7 +362,7 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
         updateVoiceParameters();
         updateEffects();
-        render (left + pos, right != nullptr ? right + pos : nullptr, end - pos);
+        render (left + pos, right != nullptr ? right + pos : nullptr, end - pos, pos);
         apply (allocator.advance (end - pos));
         pos = end;
     }
@@ -314,30 +370,56 @@ void RotorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         handleMidi ((*midiIt).getMessage());
 }
 
-void RotorAudioProcessor::render (float* left, float* right, int numSamples)
+void RotorAudioProcessor::render (float* left, float* right, int numSamples, int offset)
 {
     constexpr int os = rotor::Decimator4x::factor;
     float blockLeft[os], blockRight[os];
 
+    const bool ext = extInputParam->load() >= 0.5f && extChannels > 0;
+    const bool stereoExt = ext && extChannels == 2;
+    std::array<rotor::ExtSource, rotor::numVoices> sources {};
+    for (int v = 0; v < rotor::numVoices; ++v)
+        sources[(size_t) v] = rotor::extSourceFor (v, stereoExt);
+
     for (int i = 0; i < numSamples; ++i)
     {
-        // Noise is made at the base rate and linearly interpolated up to the voice rate.
-        const float n = noiseTilt.process (noise.process());
+        // Voice input: shared pink noise, or the EXT input (mono / left / right), tilt-EQ'd at the
+        // base rate and linearly interpolated up to the voice rate.
+        float now[3];
+        if (ext)
+        {
+            const int idx = std::min (offset + i, extBuffer.getNumSamples() - 1);
+            const float inL = extBuffer.getSample (0, idx);
+            const float inR = extChannels > 1 ? extBuffer.getSample (1, idx) : inL;
+            now[1] = extTiltLeft.process (inL);
+            now[2] = extTiltRight.process (inR);
+            now[0] = 0.5f * (now[1] + now[2]);
+        }
+        else
+        {
+            now[0] = now[1] = now[2] = noiseTilt.process (noise.process());
+        }
 
         for (int j = 0; j < os; ++j)
         {
-            const float noiseSample = previousNoise + (n - previousNoise) * (float) (j + 1) / (float) os;
+            const float t = (float) (j + 1) / (float) os;
+            float in[3];
+            for (int k = 0; k < 3; ++k)
+                in[k] = previousExt[k] + (now[k] - previousExt[k]) * t;
+
             float sumLeft = 0.0f, sumRight = 0.0f;
-            for (auto& v : voices)
+            for (int v = 0; v < rotor::numVoices; ++v)
             {
-                const float s = v.process (noiseSample);
-                sumLeft += s * v.getPanLeft();
-                sumRight += s * v.getPanRight();
+                auto& voice = voices[(size_t) v];
+                const float s = voice.process (in[(int) sources[(size_t) v]]);
+                sumLeft += s * voice.getPanLeft();
+                sumRight += s * voice.getPanRight();
             }
             blockLeft[j] = sumLeft;
             blockRight[j] = sumRight;
         }
-        previousNoise = n;
+        for (int k = 0; k < 3; ++k)
+            previousExt[k] = now[k];
 
         float l = decimatorLeft.process (blockLeft) * voiceSumGain;
         float r = decimatorRight.process (blockRight) * voiceSumGain;
@@ -363,11 +445,30 @@ void RotorAudioProcessor::render (float* left, float* right, int numSamples)
 
 void RotorAudioProcessor::handleMidi (const juce::MidiMessage& m)
 {
+    const int channel = m.getChannel();
     if (m.isNoteOn())
     {
         // OPEN: velocity response (does the hardware respond to velocity at all?).
         lastVelocity = m.getFloatVelocity();
+        expression.noteOn (channel);
+        noteChannel[(size_t) m.getNoteNumber()] = channel;
         apply (allocator.noteOn (m.getNoteNumber()));
+    }
+    else if (m.isPitchWheel())
+    {
+        expression.pitchBend (channel, m.getPitchWheelValue());
+    }
+    else if (m.isChannelPressure())
+    {
+        expression.channelPressure (channel, m.getChannelPressureValue());
+    }
+    else if (m.isAftertouch()) // polyphonic aftertouch: treated as that channel's pressure
+    {
+        expression.channelPressure (channel, m.getAfterTouchValue());
+    }
+    else if (m.isController() && ! m.isAllNotesOff() && ! m.isAllSoundOff())
+    {
+        expression.controller (channel, m.getControllerNumber(), m.getControllerValue());
     }
     else if (m.isNoteOff())
     {
@@ -389,8 +490,15 @@ void RotorAudioProcessor::apply (const rotor::VoiceAllocator::Result& result)
         switch (action.type)
         {
             case Type::none: break;
-            case Type::trigger: voice.noteOn (action.note, lastVelocity); break;
-            case Type::move: voice.moveTo (action.note); break;
+            case Type::trigger:
+                voiceChannel[(size_t) i] = noteChannel[(size_t) action.note];
+                voice.setExpression (expression.forChannel (voiceChannel[(size_t) i]));
+                voice.noteOn (action.note, lastVelocity);
+                break;
+            case Type::move:
+                voiceChannel[(size_t) i] = noteChannel[(size_t) action.note];
+                voice.moveTo (action.note);
+                break;
             case Type::release: voice.noteOff(); break;
         }
     }

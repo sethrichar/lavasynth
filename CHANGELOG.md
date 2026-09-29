@@ -14,6 +14,33 @@ Each entry: what changed, what's broken, how to roll back.
 
 ## Code
 
+### v1.8 — 2026-09-29 — Aftertouch, MPE, Global Detune / Pitch Drift, mod wheel, EXT input
+**Changed**
+- **Aftertouch** (channel pressure; per-note pressure in MPE; poly AT treated as pressure), three bipolar sliders:
+  - **AT > Wildcards / Clusters**: up = pressure blends in the four pitch wildcards; down = "harmonic clusters" —
+    voices 1, 2, 4, 5 move to −12, −5, +7, +12 semitones at full pressure while voice 3 stays put.
+  - **AT > Cutoff** (±3 octaves) and **AT > LFO Rate** (±3 octaves).
+- **MPE** (lower zone): channel 1 = manager (±2 st bend, pressure to all), channels 2–16 = per-note bend (±48 st),
+  pressure and timbre (CC74 → cutoff ±2 oct). In unison, every voice on a note follows that note's expression.
+  Normal MIDI: pitch bend ±2 st, channel pressure and CC74 apply to all voices (latest message wins).
+- **Mod Wheel** option: Wildcards (wheel blends in the pitch wildcards) or Pitch LFO (vibrato from each voice's LFO, ±1 st).
+- **Tune**: Global Detune (±1 semitone, all voices) or Pitch Drift (each voice has its own centre note and tracking error;
+  up to ±12 cents per octave away from the centre; the negative side still detunes globally, per the manual).
+- **EXT input**: a sidechain input bus (off by default). With EXT on it replaces the noise, goes through the same
+  Noise Color tilt EQ and the whole voice path (so it only sounds while notes are held). Mono input → all voices;
+  stereo → voice 1 left, voice 2 right, voices 3–5 both.
+- All new constants in `src/dsp/PerformanceTuning.h`; expression tracking in `src/dsp/Expression.h` (pure logic).
+- `RotorRender`: `--ext` (sidechain test), `--mpe`, and `--pitch-check` (verifies a per-note MPE bend lands in tune).
+- 138 unit tests (10 new).
+
+**Validated**: unit tests pass, Linux pluginval passes at strictness 5 and 10 (incl. sidechain layouts), macOS workflow
+green (pluginval + auval). Full-plugin checks: EXT audible only while notes are held; MPE +12 st per-note bend → 879–880 Hz.
+
+**Broken / not yet done**: MPE zone/bend range are fixed (lower zone, ±48) — no MPE configuration messages yet.
+The EXT input's level is the Noise Level slider (as on the hardware). Ranges are guesses — see OPEN_QUESTIONS.
+
+**Roll back**: `git checkout v1.7`.
+
 ### v1.7 — 2026-09-29 — Effects: reverb → CMOS drive, Effects Color, LFO min-maxing
 **Changed**
 - **Reverb**: stereo plate after Dattorro's classic design (the 1980s digital-plate topology), modulated tank.
