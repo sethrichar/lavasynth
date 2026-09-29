@@ -14,11 +14,13 @@ namespace
     constexpr double pi = 3.141592653589793;
 
     // Steady-state gain (dB) for a sine at `hz` (small level, so the tanh stays linear).
-    double gainDb (double hz, double cutoff, double res, Mode mode)
+    using Character = LadderFilter::Character;
+
+    double gainDb (double hz, double cutoff, double res, Mode mode, Character c = Character::rotor)
     {
         LadderFilter f;
         f.setSampleRate (sr);
-        f.setParameters (cutoff, res, mode);
+        f.setParameters (cutoff, res, mode, c);
         const double amp = 0.05;
         const int settle = (int) sr / 5, n = (int) sr / 5;
         double in = 0.0, out = 0.0;
@@ -36,11 +38,11 @@ namespace
     }
 
     // Lets the filter ring from an impulse and measures its oscillation frequency.
-    double selfOscillationHz (double cutoff, Mode mode, double* rmsOut = nullptr)
+    double selfOscillationHz (double cutoff, Mode mode, double* rmsOut = nullptr, Character c = Character::rotor)
     {
         LadderFilter f;
         f.setSampleRate (sr);
-        f.setParameters (cutoff, 1.0, mode);
+        f.setParameters (cutoff, 1.0, mode, c);
         f.process (1.0f);
         const int settle = (int) sr; // 1 s to reach steady state
         for (int i = 0; i < settle; ++i)
@@ -139,4 +141,70 @@ TEST_CASE ("Key tracking", "[ladder]")
     CHECK (keyTrackedCutoff (1000.0, 72.0, 0.5) == Catch::Approx (std::sqrt (2.0) * 1000.0));
     // At full tracking with the cutoff on middle C's pitch, the cutoff lands on each note.
     CHECK (keyTrackedCutoff (261.6256, 69.0, 1.0) == Catch::Approx (440.0).epsilon (1e-4));
+}
+
+TEST_CASE ("Every filter character: flat passband, cuts highs, 12 or 24 dB slope", "[ladder][voicing]")
+{
+    const auto c = GENERATE (Character::rotor, Character::transistorLadder, Character::otaCascade,
+                             Character::stateVariable, Character::screaming12);
+    INFO ("character " << (int) c);
+    CHECK (gainDb (100.0, 2000.0, 0.0, Mode::lowpass, c) == Catch::Approx (0.0).margin (1.0));
+    const double twoOct = gainDb (8000.0, 2000.0, 0.0, Mode::lowpass, c);
+    const double threeOct = gainDb (16000.0, 2000.0, 0.0, Mode::lowpass, c);
+    const bool twoPole = c == Character::stateVariable || c == Character::screaming12;
+    CHECK (twoOct - threeOct == Catch::Approx (twoPole ? 12.0 : 24.0).margin (2.0));
+}
+
+TEST_CASE ("Every filter character self-oscillates in tune at full resonance", "[ladder][voicing]")
+{
+    const auto c = GENERATE (Character::rotor, Character::transistorLadder, Character::otaCascade,
+                             Character::stateVariable, Character::screaming12);
+    const double cutoff = GENERATE (110.0, 880.0, 3520.0);
+    const auto mode = GENERATE (Mode::lowpass, Mode::bandpass);
+    double rms = 0.0;
+    const double hz = selfOscillationHz (cutoff, mode, &rms, c);
+    INFO ("character " << (int) c << ", cutoff " << cutoff << " → " << hz << " Hz, rms " << rms);
+    CHECK (rms > 0.05);
+    CHECK (rms < 3.0);
+    CHECK (std::abs (1200.0 * std::log2 (hz / cutoff)) < 15.0);
+}
+
+TEST_CASE ("Every filter character stays bounded with hot input", "[ladder][voicing]")
+{
+    const auto c = GENERATE (Character::rotor, Character::transistorLadder, Character::otaCascade,
+                             Character::stateVariable, Character::screaming12);
+    const auto mode = GENERATE (Mode::lowpass, Mode::bandpass);
+    const double res = GENERATE (0.0, 0.7, 1.0);
+    LadderFilter f;
+    f.setSampleRate (sr);
+    f.setParameters (300.0, res, mode, c);
+    float peak = 0.0f;
+    for (int i = 0; i < 96000; ++i)
+    {
+        const float y = f.process ((i % 400) < 200 ? 6.0f : -6.0f);
+        REQUIRE (std::isfinite (y));
+        peak = std::max (peak, std::abs (y));
+    }
+    CHECK (peak < 20.0f);
+}
+
+TEST_CASE ("Transistor ladder thins the bass with resonance; OTA cascade compensates", "[ladder][voicing]")
+{
+    const double ladderLoss = gainDb (60.0, 2000.0, 0.8, Mode::lowpass, Character::transistorLadder);
+    const double otaLoss = gainDb (60.0, 2000.0, 0.8, Mode::lowpass, Character::otaCascade);
+    CHECK (ladderLoss < -6.0);
+    CHECK (otaLoss > ladderLoss + 4.0);
+}
+
+TEST_CASE ("Bandpass self-oscillation is hotter than lowpass, but by no more than ~8 dB", "[ladder][voicing]")
+{
+    const auto c = GENERATE (Character::rotor, Character::transistorLadder, Character::otaCascade,
+                             Character::stateVariable, Character::screaming12);
+    double lpRms = 0.0, bpRms = 0.0;
+    selfOscillationHz (880.0, Mode::lowpass, &lpRms, c);
+    selfOscillationHz (880.0, Mode::bandpass, &bpRms, c);
+    const double diffDb = 20.0 * std::log10 (bpRms / lpRms);
+    INFO ("character " << (int) c << ": bandpass " << diffDb << " dB vs lowpass");
+    CHECK (diffDb > 0.0);
+    CHECK (diffDb < 8.0);
 }

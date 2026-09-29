@@ -172,6 +172,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     addDepth (lfoToSpread, "LFO > Spread");
     addDepth (lfoToFold, "LFO > Wavefolder");
 
+    // Voicing lab: compare classic-inspired characters by ear (see CHANGELOG v1.6).
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { envCurve, version }, "Envelope Curve",
+        StringArray { "Rotor", "Punchy", "Vintage Poly", "Snappy Digital", "Linear" }, 0));
+    layout.add (std::make_unique<AudioParameterChoice> (
+        ParameterID { filterCharacter, version }, "Filter Character",
+        StringArray { "Rotor", "Transistor Ladder", "OTA Cascade", "State Variable", "Screaming 12dB" }, 0));
+
+    // Wildcards: eight unipolar sliders, each acting on every voice independently.
+    auto addWildcard = [&] (const char* id, const String& name)
+    {
+        layout.add (std::make_unique<AudioParameterFloat> (
+            ParameterID { id, version }, name, NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent));
+    };
+    addWildcard (noteDetune, "Note Detune");
+    addWildcard (wow, "Wow");
+    addWildcard (flutter, "Flutter");
+    addWildcard (reelDrag, "Reel Drag");
+    addWildcard (chaos, "Chaos");
+    addWildcard (envScatter, "Envelope Scatter");
+    addWildcard (spread, "Stereo Spread");
+
     // Phase distortion offset for the main oscillators; negative warps the other way.
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { phaseDist, version }, "Phase Distortion", NormalisableRange<float> (-1.0f, 1.0f), 0.0f, bipolarPercent));
